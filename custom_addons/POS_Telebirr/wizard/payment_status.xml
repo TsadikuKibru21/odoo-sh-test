@@ -44,6 +44,6 @@
     <menuitem id="menu_redelcom_root" name="Redelcom" sequence="999"
         parent="point_of_sale.menu_point_of_sale"/>
     <menuitem id="menu_redelcom_payment_status" name="Payment Status" sequence="1"
-        parent="pos_redelcom1.menu_redelcom_root"
-        action="pos_redelcom1.redelcom_payment_status_action"/>
+        parent="POS_Telebirr.menu_redelcom_root"
+        action="POS_Telebirr.redelcom_payment_status_action"/>
 </odoo>

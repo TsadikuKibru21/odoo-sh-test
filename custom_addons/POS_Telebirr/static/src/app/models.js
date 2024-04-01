@@ -9,24 +9,24 @@ import { _t } from "@web/core/l10n/translation";
 patch(Order.prototype, {
 
 // models.Order =  models.Order.extend({
-        initialize: function(attr, options) {
-            _super_order.initialize.call(this,attr,options);
-            _super_order.initialize.apply(this, arguments);
-            this.uiState = {
-                ReceiptScreen: new Context({
-                    inputEmail: '',
-                    emailSuccessful: null,
-                    emailNotice: '',
-                }),
-                TipScreen: new Context({
-                    inputTipAmount: '',
-                }),
-                PaymentScreen: new Context({
-                    inputPhoneNumber: '',
-                }),
-            };
-        },
-
+    setup(_defaultObj, options) {
+        super.setup(...arguments);
+        this.uiState = {
+            ReceiptScreen: {
+                inputEmail: "",
+                // if null: not yet tried to send
+                // if false/true: tried sending email
+                emailSuccessful: null,
+                emailNotice: "",
+            },
+            // TODO: This should be in pos_restaurant.
+            TipScreen: {
+                inputTipAmount: "",
+            },
+            PaymentScreen:{
+                Phone:"",
+            }
+        }}
 
     });
 

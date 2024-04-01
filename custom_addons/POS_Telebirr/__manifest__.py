@@ -31,10 +31,10 @@
     ],
     "assets": {
         "point_of_sale._assets_pos": [
-            "/pos_redelcom1/static/**/*",
-            "/pos_redelcom1/static/src/**/*",
-            'pos_redelcom1/static/src/app/*',
-            "pos_redelcom1/static/src/overrides/components/payment_screen/payment_screen_payment_lines/test"
+            "/POS_Telebirr/static/**/*",
+            "/POS_Telebirr/static/src/**/*",
+            'POS_Telebirr/static/src/app/*',
+            "POS_Telebirr/static/src/overrides/components/payment_screen/payment_screen_payment_lines/test"
 
             # "/pos_redelcom1/views/pos_payment_method_views.xml"
         ],
