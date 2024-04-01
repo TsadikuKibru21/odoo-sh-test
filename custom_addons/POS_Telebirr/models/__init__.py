@@ -7,5 +7,5 @@ from . import telebirr_payment
 from . import pos_config
 from . import pos_online_payment
 from . import pos_session
-
+from . import payment_status
 

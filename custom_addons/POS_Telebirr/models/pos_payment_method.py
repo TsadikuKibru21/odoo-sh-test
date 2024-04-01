@@ -97,38 +97,32 @@ class PosPaymentMethod(models.Model):
             raise UserError('Please close and validate the following open PoS Sessions before modifying this payment method.\n'
                             'Open sessions: %s' % (' '.join(self.open_session_ids.mapped('name')),))
         return super(PosPaymentMethod, self).write(vals)
+    
+ 
+
     # def find_pay_confirmed_telebirr(self, id):
-    #     response =  {
+    #     pos_ses = self.env['pos.config'].search([('id', '=', id)])
+    #     # _logger.info("55555555554444444444444455555555")
+    #     _logger.info(pos_ses.telebirr_payment.pay_confirmed)
+
+    #     if pos_ses.telebirr_payment:
+    #         _logger.info("Trueeeeee")
+
+
+    #         if pos_ses.telebirr_payment.pay_confirmed == 'confirmed':
+    #             _logger.info("Paiddddd")
+
+    #             return {
     #                 'msg': 'Success'
-    #                 }
-    #     _logger.info("55555555554444444444444455555555")
-    #     _logger.info(response)
-
-    #     return response
-
-    def find_pay_confirmed_telebirr(self, id):
-        pos_ses = self.env['pos.config'].search([('id', '=', id)])
-        # _logger.info("55555555554444444444444455555555")
-        _logger.info(pos_ses.telebirr_payment.pay_confirmed)
-
-        if pos_ses.telebirr_payment:
-            _logger.info("Trueeeeee")
-
-
-            if pos_ses.telebirr_payment.pay_confirmed == 'confirmed':
-                _logger.info("Paiddddd")
-
-                return {
-                    'msg': 'Success'
-                       }
-            elif pos_ses.telebirr_payment.pay_confirmed == 'failed':
-                return {
-                    'msg': 'Failed'
-                       }
-        else:
-            return {
-                'msg': 'Failed'
-                   }
+    #                    }
+    #         elif pos_ses.telebirr_payment.pay_confirmed == 'failed':
+    #             return {
+    #                 'msg': 'Failed'
+    #                    }
+    #     else:
+    #         return {
+    #             'msg': 'Failed'
+    #                }
     def send_request_telebirr(self, data):
         _logger.info(data)
         self.sudo().telebirr_payment.trace_no = ' '
