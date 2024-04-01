@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="pos_redelcom.PaymentScreenPaymentLines" t-inherit="point_of_sale.PaymentScreenPaymentLines" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('paymentline')]" position="after">         
+            <input name="Phone" type="text" t-model="orderUiState.Phone"  placeholder="Phone Number"/>
+            
+
+            <div class="button sendPaymentRequest" title="sendPaymentRequest" t-on-click="() => this.props.sendPaymentRequest(line)">
+            </div>
+
+        </xpath>
+        <xpath expr="//div[hasclass('electronic_payment')]" position="after">         
+            <div class="button">
+                <!-- <t t-if="line.payment_status == 'waitingCard'">
+                    <div class="control-button" style="background-color: #905f78; color: white; border-radius: 5px; padding: 10px; display: inline-block; cursor: pointer;">
+                        <button type="button" class="btn btn-primary" t-on-click="checkPaymentStatus">Check</button>
+                    </div> 
+                </t> -->
+            </div>
+        </xpath>
+    </t>
+</templates>
+
+
+
+
+
+
+
+
+
