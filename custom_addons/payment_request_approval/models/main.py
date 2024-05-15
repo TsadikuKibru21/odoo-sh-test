@@ -75,106 +75,62 @@ class Payment_Request(models.Model):
                             _logger.info("forth")
                             break;
             _logger.info(create_request)
-            # updated to create under the vendor payments
-            # Check if a payment request should be created
+            # wsdgasdvh
             if create_request == True:
-                # Search for the oldest "bank" type journal
-                journal = self.env['account.journal'].search(
-                    [('type', "=", "bank")], order="create_date asc", limit=1)
+
+                # _logger.info(a.user_id.	x_studio_approve_payment_max) 
+                    _logger.info("########################################")
                 
-                # Get the manual outbound payment method
-                payment_method = self.env.ref('account.account_payment_method_manual_out')
-                
-                # Prepare the values for the new payment
-                val = {
-                    "payment_type": "outbound",  # The payment is outbound (we are paying a vendor)
-                    "partner_type": "supplier",  # The partner is a supplier
-                    "partner_id": approver.request_id.partner_id.id,  # The partner's ID
-                    "amount": approver.request_id.amount,  # The amount of the payment
-                    "date": approver.request_id.date,  # The date of the payment
-                    "journal_id": journal.id,  # The journal where the payment will be recorded
-                    "payment_method_id": payment_method.id,
-                    "ref":approver.request_id.name
-                  # The payment method
-                }
-                
-                # Log the prepared values
-                _logger.info(val)
-                
-                # Create the new payment
-                result = self.env['account.payment'].create(val)
-                
-                # Link the new payment to the approval request
-                approver.request_id.reciept_id = result.id
-                
-                # Log the created payment
-                _logger.info(result)
+                # status_lst = approver.request_id.mapped('approver_ids.status')
+                # minimal_approver = approver.request_id.approval_minimum if len(
+                #     status_lst) >= approver.request_id.approval_minimum else len(status_lst)
+                # _logger.info("begin cheking status 1")
+                # status = ""
+                # # sdsdefwefe
+                # if status_lst:
+                #     if status_lst.count('cancel'):
+                #         status = 'cancel'
+                #     elif status_lst.count('refused'):
+                #         status = 'refused'
+                #     elif status_lst.count('new'):
+                #         status = 'new'
+                #     elif status_lst.count('approved') >= minimal_approver:
+                #         status = 'approved'
+                #     # else:
+                #     #     status = 'pending' 
+                #     elif status_lst.count('approved') == minimal_approver - 1:
+                #         status = 'pending'
+                # _logger.info(status)
+                # _logger.info(minimal_approver)
+                # if status == 'pending':
+                    journal = self.env['account.journal'].search(
+                        [('type', "=", "purchase")], order="create_date asc", limit=1)
+                    val = {
+                        # "partner_id": approver.request_id.partner_id.id,
+                        "journal_id": journal.id,
+                        "move_type": "in_invoice",
+                        "invoice_date": approver.request_id.date,
+                        "date": approver.request_id.date,
+                    }
+                    if approver.request_id.partner_id != False:
+                        val['partner_id'] = approver.request_id.partner_id.id
+                    if approver.request_id.reference != False:
+                        val['contact_name'] = approver.request_id.reference
+                    line_data = {
+                        "account_id": journal.default_account_id.id,
+                        "quantity": 1,
+                        "price_unit": approver.request_id.amount,
+                        "price_subtotal": approver.request_id.amount,
+                        "partner_id":  approver.request_id.partner_id.id,
 
-
-
-
-
-
-
-            # # wsdgasdvh
-            # if create_request == True:
-
-            #         # _logger.info(a.user_id.	x_studio_approve_payment_max) 
-            #         _logger.info("########################################")
-                    
-            #         # status_lst = approver.request_id.mapped('approver_ids.status')
-            #         # minimal_approver = approver.request_id.approval_minimum if len(
-            #         #     status_lst) >= approver.request_id.approval_minimum else len(status_lst)
-            #         # _logger.info("begin cheking status 1")
-            #         # status = ""
-            #         # # sdsdefwefe
-            #         # if status_lst:
-            #         #     if status_lst.count('cancel'):
-            #         #         status = 'cancel'
-            #         #     elif status_lst.count('refused'):
-            #         #         status = 'refused'
-            #         #     elif status_lst.count('new'):
-            #         #         status = 'new'
-            #         #     elif status_lst.count('approved') >= minimal_approver:
-            #         #         status = 'approved'
-            #         #     # else:
-            #         #     #     status = 'pending' 
-            #         #     elif status_lst.count('approved') == minimal_approver - 1:
-            #         #         status = 'pending'
-            #         # _logger.info(status)
-            #         # _logger.info(minimal_approver)
-            #         # if status == 'pending':
-
-
-
-            #         journal = self.env['account.journal'].search(
-            #             [('type', "=", "bank")], order="create_date asc", limit=1)
-            #         val = {
-            #             # "partner_id": approver.request_id.partner_id.id,
-            #             "journal_id": journal.id,
-            #             "move_type": "in_invoice",
-            #             "invoice_date": approver.request_id.date,
-            #             "date": approver.request_id.date,
-            #         }
-            #         if approver.request_id.partner_id != False:
-            #             val['partner_id'] = approver.request_id.partner_id.id
-            #         if approver.request_id.reference != False:
-            #             val['contact_name'] = approver.request_id.reference
-            #         line_data = {
-            #             "account_id": journal.default_account_id.id,
-            #             "quantity": 1,
-            #             "price_unit": approver.request_id.amount,
-            #             "price_subtotal": approver.request_id.amount,
-            #             "partner_id":  approver.request_id.partner_id.id,
-
-            #         }
-            #         _logger.info("finished invoice line")
-            #         invoice_line = (0, 0, line_data)
-            #         val['invoice_line_ids'] = [invoice_line]
-            #         _logger.info(val)
-            #         result = self.env['account.payment'].create(val)
-            #         approver.request_id.reciept_id = result.id
-            #         _logger.info(result)
+                    }
+                    _logger.info("finished invoice line")
+                    invoice_line = (0, 0, line_data)
+                    val['invoice_line_ids'] = [invoice_line]
+                    _logger.info(val)
+                    result = self.env['account.move'].create(val)
+                    approver.request_id.reciept_id = result.id
+                    _logger.info(result)
         approver.write({'status': 'approved'})
         self.sudo()._get_user_approval_activities(user=self.env.user).action_feedback()
         # if approver.request_id.category_id.id == 1:
