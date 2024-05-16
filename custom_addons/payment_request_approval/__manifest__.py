@@ -1,7 +1,7 @@
 # See LICENSE file for full copyright and licensing details.
 
 {
-    "name": "Payment Request Approval",
+    "name": "Payment Request Approvals",
     "version": "17.0.1.0.0",
     "author": "T.A",
     "category": "Tools",
