@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="stock_picking_backdate_wiz_view_form" model="ir.ui.view">
+        <field name="name">stock.picking.backdate.wiz.wizard.view</field>
+        <field name="model">stock.picking.backdate.wiz</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <field name="date"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="change_to_backdate" type="object" string="Confirm" class="btn-primary"/>
+                    <button name="cancel" special="cancel" string="Cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>
