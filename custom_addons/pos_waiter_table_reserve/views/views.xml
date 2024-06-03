@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_restaurant_table_employee_form" model="ir.ui.view">
+          <field name="name">Restaurant Table</field>
+            <field name="model">restaurant.table</field>
+        <field name="inherit_id" ref="pos_restaurant.view_restaurant_table_form" />
+        <field name="arch" type="xml">
+                        <data>
+            <xpath expr="//field[@name='seats']" position="after">
+                <!-- Add your new fields here -->
+               <!-- <field name="hr_employee_id"/> -->
+               <field name="waiter_ids" widget="many2many_tags"/>
+                    <!-- <field name="waiter_ids"/> -->
+                <!-- Add as many fields as you need -->
+            </xpath>
+        </data>
+
+               
+        </field>
+    </record>
+</odoo>
+

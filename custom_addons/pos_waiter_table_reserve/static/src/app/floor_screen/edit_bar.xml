@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="pos_waiter_table_reserve.EditBar" t-inherit="pos_restaurant.EditBar" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('flex-fill')]" position="after">         
+            <span role="button" class="edit-button text-center d-flex flex-column btn btn-light text-uppercase" t-on-click.stop="props.changeEmployee">
+                    <i class="fa fa-plus icon-button" role="img" aria-label="Add" title="Add"></i>
+                  <label class="form-label label" for="reason">Reason</label>
+						<select class="w-75 form-control" name="reason">
+							<!-- <option t-foreach="props.reasons" t-as="reason" t-key="reason.id" t-att-value="reason.reason">
+								<t t-esc="reason.reason"/>
+							</option> -->
+						</select>
+            </span>
+
+        </xpath>
+       
+    </t>
+</templates>
+
+
+

@@ -4,15 +4,19 @@
     <t t-name="pos_etta.Navbar" t-inherit="point_of_sale.Navbar" t-inherit-mode="extension">
         <xpath expr="//div[hasclass('pos-branding')]/img" position="replace">
             <img class="pos-logo h-75 ms-3 me-auto align-self-center" t-on-click="() => debug.toggleWidget()" src="/pos_etta/static/img/app_logo.png"/>
-            <span t-on-click="turnOffRefund" t-if="isRefund" style="padding: 0px; align-content: center; margin: 0px; color: red; font-weight:bold;">REFUND MODE</span>
-            <!-- <span t-on-click="turnOnRefund" t-if="not isRefund" style="padding: 0px; align-content: center; margin: 0px; color: green; font-weight:bold;">SALE MODE</span> -->
         </xpath>
-        <xpath expr="//div[hasclass('pos-branding')]" position="after">
-            <span t-on-click="turnOffRefund" t-if="ui.isSmall and isRefund" style="padding: 0px; align-content: center; margin: 0px; color: red; font-weight:bold;">REFUND MODE</span>
-            <!-- <span t-on-click="turnOnRefund" t-if="ui.isSmall and not isRefund" style="padding: 0px; align-content: center; margin: 0px; color: green; font-weight:bold;">SALE MODE</span> -->
+        <xpath expr="//div[contains(@class, 'status-buttons')]" position="inside">
+            <div t-on-click="togglePosMode" class="oe_status btn btn-light rounded-0">
+                <div t-if="isRefund" class="js_connected oe_icon text-danger">
+                    <i class="fa fa-reply" role="img" aria-label="R Mode" title="R Mode"> R-MODE</i>
+                </div>
+                <div t-if="!isRefund" class="js_connected oe_icon text-success">
+                    <i class="fa fa-share" role="img" aria-label="S Mode" title="S Mode"> S-MODE</i>
+                </div>
+            </div>
         </xpath>
         <xpath expr="//div[contains(@class, 'menu-button')]/ul/li/ul" position="inside">
-            <li class="menu-item navbar-button edit-button" t-on-click="onZmallClicked">
+            <li t-if="pos.config.enabled_zmall" class="menu-item navbar-button edit-button" t-on-click="onZmallClicked">
                 <a class="dropdown-item py-2">Z Mall</a>
             </li>
             <li t-if="isAdvancedUserAccess" class="menu-item navbar-button edit-button" t-on-click="onPrintAllPlusClick">
@@ -20,6 +24,9 @@
             </li>
             <li t-if="isAdvancedUserAccess" class="menu-item navbar-button edit-button" t-on-click="onPrintAllTaxRates">
                 <a class="dropdown-item py-2">Print All Tax Rates</a>
+            </li>
+            <li class="menu-item navbar-button edit-button" t-on-click="() => this.onEJReadClick()">
+                <a class="dropdown-item py-2">EJ Reading</a>
             </li>
             <li class="menu-item navbar-button edit-button" t-on-click="() => this.onClick()">
                 <a class="dropdown-item py-2">Fiscal Reading</a>

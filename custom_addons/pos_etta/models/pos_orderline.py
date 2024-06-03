@@ -1,62 +1,111 @@
-from odoo import fields, models, api
+from odoo import fields, models, api, _
+
 import logging
-
 _logger = logging.getLogger(__name__)
-
-class SaleOrder(models.Model):
-    _inherit = 'sale.order'
-    
-    service_charge = fields.Float(string='Service Charge')
+from odoo.exceptions import ValidationError, UserError
+from odoo.tools import float_repr, float_compare
+from datetime import timedelta
 
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
-    
     service_charge = fields.Float(string='Service Charge')
+    
+    @api.depends('product_uom_qty', 'discount', 'price_unit', 'tax_id', 'service_charge')
+    def _compute_amount(self):
+        for line in self:
+            price = line.price_unit * (1 - (line.discount or 0.0) / 100.0)
+            price_with_service_charge = price * (1 + (line.service_charge or 0.0) / 100.0)
+            total_with_service_charge=price_with_service_charge*line.product_uom_qty
+            taxes = line.tax_id.compute_all(
+                total_with_service_charge,
+                line.order_id.currency_id,
+                line.product_uom_qty,
+                product=line.product_id,
+                partner=line.order_id.partner_shipping_id
+                
+            )
+            line.update({
+                'price_subtotal': taxes['total_excluded'],
+                'price_tax': taxes['total_included'] - taxes['total_excluded'],
+                'price_total': taxes['total_included'],
+            })
 
 class AccountMove(models.Model):
     _inherit = 'account.move'
     
+    pos_order_id = fields.Many2one('pos.order', string='POS Order', help='Reference to the POS order')
     service_charge = fields.Float(string='Service Charge')
-
+    is_refund = fields.Boolean(string="Is Refund", help="Is a Refund Order")
+    fs_no = fields.Char('FS No')
+    rf_no = fields.Char('RF No')
+    fiscal_mrc = fields.Char('MRC')
+    payment_qr_code_str = fields.Char('Payment QR Code')
+    
 class AccountMoveLine(models.Model):
     _inherit = 'account.move.line'
     
     service_charge = fields.Float(string='Service Charge')
+    
+    # def _check_amls_exigibility_for_reconciliation(self, shadowed_aml_values=None):
+    #     """ Ensure the current journal items are eligible to be reconciled together.
+    #     :param shadowed_aml_values: A mapping aml -> dictionary to replace some original aml values to something else.
+    #                                 This is usefull if you want to preview the reconciliation before doing some changes
+    #                                 on amls like changing a date or an account.
+    #     """
+    #     if not self:
+    #         return
 
+    #     if any(aml.reconciled for aml in self):
+    #         raise UserError(_("You are trying to reconcile some entries that are already reconciled."))
+    #     # if any(aml.parent_state != 'posted' for aml in self):
+    #     #     raise UserError(_("You can only reconcile posted entries."))
+    #     accounts = self.mapped(lambda x: x._get_reconciliation_aml_field_value('account_id', shadowed_aml_values))
+    #     if len(accounts) > 1:
+    #         raise UserError(_(
+    #             "Entries are not from the same account: %s",
+    #             ", ".join(accounts.mapped('display_name')),
+    #         ))
+    #     if len(self.company_id.root_id) > 1:
+    #         raise UserError(_(
+    #             "Entries don't belong to the same company: %s",
+    #             ", ".join(self.company_id.mapped('display_name')),
+    #         ))
+    #     if not accounts.reconcile and accounts.account_type not in ('asset_cash', 'liability_credit_card'):
+    #         raise UserError(_(
+    #             "Account %s does not allow reconciliation. First change the configuration of this account "
+    #             "to allow it.",
+    #             accounts.display_name,
+    #         ))
+    
     @api.depends('quantity', 'discount', 'price_unit', 'tax_ids', 'currency_id', 'service_charge')
     def _compute_totals(self):
         for line in self:
             if line.display_type != 'product':
                 line.price_total = line.price_subtotal = False
-            # Compute 'price_subtotal'.
+            # Compute 'price_subtotal'. 
             line_discount_price_unit = line.price_unit * (1 - (line.discount / 100.0))
             line_service_charge_price_unit = line_discount_price_unit * (1 + (line.service_charge / 100.0))
             subtotal = line.quantity * line_service_charge_price_unit
-
+            
             # Compute 'price_total'.
+            
             if line.tax_ids:
+               
                 taxes_res = line.tax_ids.compute_all(
-                    line_discount_price_unit,
+                    line_service_charge_price_unit,
                     quantity=line.quantity,
                     currency=line.currency_id,
                     product=line.product_id,
                     partner=line.partner_id,
                     is_refund=line.is_refund,
                 )
+            
                 line.price_subtotal = taxes_res['total_excluded']
                 line.price_total = taxes_res['total_included']
+              
+                
             else:
                 line.price_total = line.price_subtotal = subtotal
-
-class PurchaseOrder(models.Model):
-    _inherit = 'purchase.order'
-    
-    service_charge = fields.Float(string='Service Charge')
-
-class PurchaseOrderLine(models.Model):
-    _inherit = 'purchase.order.line'
-    
-    service_charge = fields.Float(string='Service Charge')
 
 class PosOrderInherit(models.Model):
     _inherit = 'pos.order'
@@ -66,6 +115,7 @@ class PosOrderInherit(models.Model):
     rf_no = fields.Char('RF No')
     ej_checksum = fields.Char('EJ Checksum')
     fiscal_mrc = fields.Char('MRC')
+    payment_qr_code_str = fields.Char('Payment QR Code')
 
     @api.model
     def _order_fields(self, ui_order):
@@ -75,8 +125,15 @@ class PosOrderInherit(models.Model):
             'fs_no': ui_order.get('fs_no', ''),
             'rf_no': ui_order.get('rf_no', ''),
             'ej_checksum': ui_order.get('ej_checksum', ''),
-            'fiscal_mrc': ui_order.get('fiscal_mrc', '')
-            })
+            'fiscal_mrc': ui_order.get('fiscal_mrc', ''),
+            'payment_qr_code_str': ui_order.get('payment_qr_code_str', ''),
+        })
+
+        if 'date_order' in vals:
+            date_order = fields.Datetime.from_string(vals['date_order'])
+            date_order += timedelta(hours=3)
+            vals['date_order'] = fields.Datetime.to_string(date_order)
+
         return vals
     
     @api.onchange('service_charge', 'price_unit', 'tax_ids', 'qty', 'discount', 'product_id')
@@ -86,6 +143,11 @@ class PosOrderInherit(models.Model):
     @api.model
     def _amount_line_tax(self, line, fiscal_position_id):
         super(PosOrderInherit, self)._amount_line_tax()
+        taxes = line.tax_ids.filtered_domain(self.env['account.tax']._check_company_domain(line.order_id.company_id))
+        taxes = fiscal_position_id.map_tax(taxes)
+        price = line.price_unit * (1 - (line.discount or 0.0) / 100.0)
+        taxes = taxes.compute_all(price, line.order_id.currency_id, line.qty, product=line.product_id, partner=line.order_id.partner_id or False)['taxes']
+
         price = line.price_unit * (1 + (line.service_charge or 0.0) / 100.0)
         return sum(tax.get('amount', 0.0) for tax in taxes)
 
@@ -154,8 +216,8 @@ class PosOrderInherit(models.Model):
         line_values_list = self._prepare_tax_base_line_values(sign=sign)
         invoice_lines = []
         for line_values in line_values_list:
-            _logger.info(">>>>>>>>>>>>>>>>>>>>>>>>>> line_values service_charge <<<<<<<<<<<<<<<<<<<<<<<<<<")
-            _logger.info(line_values['service_charge'])
+            # _logger.info(">>>>>>>>>>>>>>>>>>>>>>>>>> line_values service_charge <<<<<<<<<<<<<<<<<<<<<<<<<<")
+            # _logger.info(line_values['service_charge'])
             line = line_values['record']
             invoice_lines.append((0, None, {
                 'product_id': line_values['product'].id,
@@ -181,6 +243,32 @@ class PosOrderInherit(models.Model):
                 }))
 
         return invoice_lines
+
+    def _prepare_invoice_vals(self):
+        result = super(PosOrderInherit, self)._prepare_invoice_vals()
+        result.update({
+            'pos_order_id': self.id,
+            'invoice_date' : self.date_order,
+            'ref': self.pos_reference,
+            'fs_no':self.fs_no,
+            'is_refund': self.is_refund,
+            'rf_no':self.rf_no,
+            'fiscal_mrc':self.fiscal_mrc,
+            'payment_qr_code_str': self.payment_qr_code_str,
+        })
+        return result
+
+    def _export_for_ui(self, order):
+        result = super(PosOrderInherit, self)._export_for_ui(order)
+        result.update({
+            'is_refund': order.is_refund,
+            'fs_no': order.fs_no,
+            'rf_no': order.rf_no,
+            'ej_checksum': order.ej_checksum,
+            'fiscal_mrc': order.fiscal_mrc,
+            'payment_qr_code_str': order.payment_qr_code_str,
+        })
+        return result
 
 class PosOrderLineInherit(models.Model):
     _inherit = 'pos.order.line'
@@ -250,3 +338,18 @@ class PosOrderLineInherit(models.Model):
             'combo_line_ids': orderline.combo_line_ids.mapped('id'),
             'service_charge': orderline.service_charge,  # Add the service charge here
         }
+        
+class ProductTemplate(models.Model):
+    _inherit = 'product.template'
+
+    def write(self, values):
+        if 'name' in values:
+            for product in self:
+                pos_order_lines = self.env['pos.order.line'].search([('product_id.product_tmpl_id', '=', product.id)], limit=1)
+                if pos_order_lines:
+                    raise ValidationError(_("You cannot change the name of a product that has transaction history in the POS."))
+        if 'taxes_id' in values:
+            open_pos_sessions = self.env['pos.session'].search([('state', '=', 'opened')])
+            if open_pos_sessions:
+                raise ValidationError(_("You cannot change taxes while there is an open POS session. Please close all sessions and try again."))
+        return super(ProductTemplate, self).write(values)

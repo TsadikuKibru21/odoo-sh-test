@@ -1,4 +1,6 @@
-from odoo import models, api, fields
+from odoo import models, api
+from datetime import datetime
+import pytz
 
 # In this custom module, we have extended the 'pos.session' model to add additional functionality.
 # We have overridden the '_pos_ui_models_to_load' method to include 'void.reason' and 'account.tax' in the models to load.
@@ -12,6 +14,21 @@ class PosSession(models.Model):
     """Model inherited to add additional functionality"""
     _inherit = 'pos.session'
 
+    # @api.model
+    # def get_server_time(device_timezone):
+    #     # Get current UTC time with timezone awareness
+    #     utc_now = datetime.now(pytz.utc)
+    #     # Convert to device's timezone
+    #     device_tz = pytz.timezone(device_timezone)
+    #     server_time_device_tz = utc_now.astimezone(device_tz)
+    #     return server_time_device_tz.isoformat()
+
+    @api.model
+    def get_server_time(self):
+        ethiopia_tz = pytz.timezone('Africa/Addis_Ababa')
+        utc_now = datetime.now(ethiopia_tz)
+        return utc_now.isoformat()
+    
     def _pos_ui_models_to_load(self):
         """Used to super the _pos_ui_models_to_load"""
         result = super()._pos_ui_models_to_load()
@@ -38,7 +55,10 @@ class PosSession(models.Model):
         # this is usefull to evaluate reward domain in frontend
         params['search_params']['fields'].append('service_charge')
         return params
-    
+    def _loader_params_res_users(self):
+        params = super()._loader_params_res_users()
+        params["search_params"]["fields"].extend(["pos_login_direct", "pos_logout_direct", "pos_pin"])
+        return params
     def _loader_params_account_tax(self):
         params = super()._loader_params_account_tax()
         params['search_params']['fields'].append('type_tax_use')

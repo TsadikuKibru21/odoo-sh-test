@@ -2,6 +2,10 @@
 
 import { patch } from "@web/core/utils/patch";
 import { TicketScreen } from "@point_of_sale/app/screens/ticket_screen/ticket_screen";
+import { NumberPopup } from "@point_of_sale/app/utils/input_popups/number_popup";
+import { SelectionPopup } from "@point_of_sale/app/utils/input_popups/selection_popup";
+import { ErrorPopup } from "@point_of_sale/app/errors/popups/error_popup";
+import { _t } from "@web/core/l10n/translation";
 
 patch(TicketScreen.prototype, {
     _getToRefundDetail(orderline) {
@@ -9,6 +13,34 @@ patch(TicketScreen.prototype, {
         result.service_charge = orderline.service_charge;
         return result;
     },
+    _getSearchFields() {
+        var res = super._getSearchFields();
+        res.FS_NUMBER = {
+            repr: (order) => order.fs_no,
+            displayName: _t("FS No"),
+            modelField: "fs_no",
+        };
+
+        res.RF_NUMBER = {
+            repr: (order) => order.rf_no,
+            displayName: _t("RF No"),
+            modelField: "rf_no",
+        };
+
+        return res;
+    },
+    // async onDeleteOrder(order) {
+    //     if(this.pos.get_order().isFiscalPrinted()){
+    //         this.env.services.notification.add("Can not delete order which has printed fiscal receipt", {
+    //             type: 'info',
+    //             sticky: false,
+    //             timeout: 10000,
+    //         });
+    //     }
+    //     else {
+    //         super.onDeleteOrder(...arguments);
+    //     }
+    // },
     _prepareRefundOrderlineOptions(toRefundDetail) {
         const { qty, orderline } = toRefundDetail;
         const draftPackLotLines = orderline.pack_lot_lines
@@ -29,67 +61,68 @@ patch(TicketScreen.prototype, {
         return res;
     },
     async onDoRefund() {
-        const order = this.getSelectedOrder();
+        let selectedApprover = await this.selectApproverCashier();
+        if (selectedApprover) {
+            this.pos.set_is_refund_order(true);
+            super.onDoRefund();
+        }
+    },
+    async checkPin(employee) {
+        const { confirmed, payload: inputPin } = await this.popup.add(NumberPopup, {
+            isPassword: true,
+            title: _t("Password?"),
+        });
 
-        if (order && this._doesOrderHaveSoleItem(order)) {
-            if (!this._prepareAutoRefundOnOrder(order)) {
-                // Don't proceed on refund if preparation returned false.
-                return;
-            }
+        if (!confirmed) {
+            return false;
         }
 
-        if (!order) {
-            this._state.ui.highlightHeaderNote = !this._state.ui.highlightHeaderNote;
-            return;
-        }
-
-        const partner = order.get_partner();
-
-        const allToRefundDetails = this._getRefundableDetails(partner);
-        if (allToRefundDetails.length == 0) {
-            this._state.ui.highlightHeaderNote = !this._state.ui.highlightHeaderNote;
-            return;
-        }
-
-        // The order that will contain the refund orderlines.
-        // Use the destinationOrder from props if the order to refund has the same
-        // partner as the destinationOrder.
-        const destinationOrder =
-            this.props.destinationOrder &&
-            partner === this.props.destinationOrder.get_partner() &&
-            !this.pos.doNotAllowRefundAndSales()
-                ? this.props.destinationOrder
-                : this._getEmptyOrder(partner);
-
-        // Add orderline for each toRefundDetail to the destinationOrder.
-        for (const refundDetail of allToRefundDetails) {
-            const product = this.pos.db.get_product_by_id(refundDetail.orderline.productId);
-            const options = this._prepareRefundOrderlineOptions(refundDetail);
-            await destinationOrder.add_product(product, options);
-            refundDetail.destinationOrderUid = destinationOrder.uid;
-        }
-
-        //Add a check too see if the fiscal position exist in the pos
-        if (order.fiscal_position_not_found) {
-            this.showPopup("ErrorPopup", {
-                title: _t("Fiscal Position not found"),
-                body: _t(
-                    "The fiscal position used in the original order is not loaded. Make sure it is loaded by adding it in the pos configuration."
-                ),
+        if (employee.pin !== Sha1.hash(inputPin)) {
+            await this.popup.add(ErrorPopup, {
+                title: _t("Incorrect Password"),
+                body: _t("Please try again."),
             });
-            return;
+            return false;
         }
-        destinationOrder.fiscal_position = order.fiscal_position;
-        // Set the partner to the destinationOrder.
-        this.setPartnerToRefundOrder(partner, destinationOrder);
+        return true;
+    },
+    async selectApproverCashier() {
+        if (this.pos.config.module_pos_hr) {
+            const employeesList = this.pos.employees
+                .filter((employee) => employee.role === 'manager')
+                .map((employee) => {
+                    return {
+                        id: employee.id,
+                        item: employee,
+                        label: employee.name,
+                        isSelected: false,
+                    };
+                });
+            if (!employeesList.length) {
+                this.env.services.notification.add("Not Configured for Refund Mode", {
+                    type: 'info',
+                    sticky: false,
+                    timeout: 10000,
+                });
+                return undefined;
+            }
+            const { confirmed, payload: employee } = await this.popup.add(SelectionPopup, {
+                title: _t("Select Refund Approver"),
+                list: employeesList,
+            });
 
-        if (this.pos.get_order().cid !== destinationOrder.cid) {
-            this.pos.set_order(destinationOrder);
+            if (!confirmed || !employee || (employee.pin && !(await this.checkPin(employee)))) {
+                return false;
+            }
+
+            return true;
         }
-
-        // this.pos.get_order().set_is_refund_order(true);
-        this.pos.set_is_refund_order(true);
-
-        this.closeTicketScreen();
+        else {
+            this.env.services.notification.add("Not Configured for Refund Mode", {
+                type: 'info',
+                sticky: false,
+                timeout: 10000,
+            });
+        }
     }
 });

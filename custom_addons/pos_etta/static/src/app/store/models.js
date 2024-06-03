@@ -6,15 +6,35 @@ import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
 import { VoidReasonPopup } from "../void_reason_popup/void_reason_popup";
 import { ErrorPopup } from "@point_of_sale/app/errors/popups/error_popup";
+import { ConfirmPopup } from "@point_of_sale/app/utils/confirm_popup/confirm_popup";
+// import { QRCode } from "../../../lib/qrcode";
 
 patch(Order.prototype, {
     setup(_defaultObj, options) {
         super.setup(...arguments);
+        if (this.pos.config.pos_customer_id) {
+            var default_customer = this.pos.config.pos_customer_id[0];
+            var partner = this.pos.db.get_partner_by_id(default_customer);
+            this.set_partner(partner);
+        }
         this.is_refund = false;
         this.fs_no = "";
         this.rf_no = "";
         this.ej_checksum = "";
         this.fiscal_mrc = "";
+        this.payment_qr_code_str = "";
+        if (options.json) {
+            this.set_is_refund_order(options.json.is_refund);
+            this.set_fs_no(options.json.fs_no);
+            this.set_rf_no(options.json.rf_no);
+            this.set_ej_checksum(options.json.ej_checksum);
+            this.set_fiscal_mrc(options.json.fiscal_mrc);
+            this.set_payment_qr_code(options.payment_qr_code_str);
+            if (options.json.partner_id) {
+                var partner = this.pos.db.get_partner_by_id(options.json.partner_id);
+                this.set_partner(partner);
+            }
+        }
     },
     init_from_JSON(json) {
         super.init_from_JSON(json);
@@ -23,6 +43,7 @@ patch(Order.prototype, {
         this.set_rf_no(json.rf_no);
         this.set_ej_checksum(json.ej_checksum);
         this.set_fiscal_mrc(json.fiscal_mrc);
+        this.set_payment_qr_code(json.payment_qr_code_str);
     },
     export_as_JSON() {
         const jsonResult = super.export_as_JSON();
@@ -31,57 +52,178 @@ patch(Order.prototype, {
         jsonResult.rf_no = this.rf_no;
         jsonResult.ej_checksum = this.ej_checksum;
         jsonResult.fiscal_mrc = this.fiscal_mrc;
+        jsonResult.payment_qr_code_str = this.payment_qr_code_str;
         return jsonResult;
     },
-    async removeOrderline(line) {
-        let changes = Object.values(this.pos.get_order().changesToOrder());
-        let found = false;
-        let orderedQty = 0;
-
-        if (changes.length != 0) {
-            for (let i = 0; i < changes.length; i++) {
-                const change = changes[i];
-                for (let j = 0; j < change.length; j++) {
-                    const element = change[j];
-                    if (element.product_id == this.pos.get_order().get_selected_orderline().get_product().id) {
-                        orderedQty = element.quantity;
-                        found = true;
-                        break;
+    get_data_to_store() {
+        let orderedQty = 1;
+        if (this.pos.config.module_pos_restaurant) {
+            if (changes.length != 0) {
+                for (let i = 0; i < changes.length; i++) {
+                    const change = changes[i];
+                    for (let j = 0; j < change.length; j++) {
+                        const element = change[j];
+                        if (element.product_id == this.pos.get_order().get_selected_orderline().get_product().id) {
+                            orderedQty = element.quantity;
+                            break;
+                        }
                     }
                 }
             }
         }
 
-        if (found) {
-            if (this.pos.get_cashier().role === 'manager') {
-                const popupResult = await this.env.services.popup.add(VoidReasonPopup, {
-                    title: _t("Void Orderline"),
-                    orderedQty: orderedQty
-                });
+        const id = this.pos.get_order().get_selected_orderline().product.id;
+        const productName = this.pos.get_order().get_selected_orderline().product.display_name;
+        const unitPrice = this.pos.get_order().get_selected_orderline().product.lst_price;
+        const quantity = orderedQty
+        const pluCode = this.pos.get_order().get_selected_orderline().product.default_code ? this.pos.get_order().get_selected_orderline().product.default_code : "00007"
 
-                const id = this.pos.get_order().get_selected_orderline().product.id;
-                const productName = this.pos.get_order().get_selected_orderline().product.display_name;
-                const unitPrice = this.pos.get_order().get_selected_orderline().product.lst_price;
-                const quantity = this.pos.get_order().selected_orderline.quantityStr
-                const pluCode = this.pos.get_order().get_selected_orderline().product.default_code ? this.pos.get_order().get_selected_orderline().product.default_code : "00007"
-                const taxRate = this.pos.get_order().get_selected_orderline().product.tax_id === undefined ? 0 : this.pos.get_order().get_selected_orderline().product.tax_id.length > 0 ? this.pos.taxes_by_id[this.pos.get_order().get_selected_orderline().product.taxes_id[0]].amount : 0
+        const taxRate = this.pos.get_order().get_selected_orderline().product.taxes_id === undefined ? 0 : this.pos.get_order().get_selected_orderline().product.taxes_id.length > 0 ? this.pos.taxes_by_id[this.pos.get_order().get_selected_orderline().product.taxes_id[0]].amount : 0
+        const name = this.pos.get_order().name
+        const discountAmount = this.pos.get_order().get_selected_orderline().product.discount;
+        const serviceChargeAmount = this.pos.get_order().get_selected_orderline().product.service_charge;
+        const productDescription = this.pos.get_order().get_selected_orderline().product.description ? this.pos.get_order().get_selected_orderline().product.description : this.pos.get_order().get_selected_orderline().product.display_name + " Description"
 
-                const dataToStore = {
-                    id: id,
-                    productName: productName,
-                    unitPrice: unitPrice,
-                    quantity: quantity,
-                    pluCode: pluCode,
-                    taxRate: taxRate
+        const dataToStore = {
+            name: name,
+            id: id,
+            pluCode: pluCode,
+            productName: productName,
+            productDescription: productDescription,
+            quantity: quantity,
+            unitName: "",
+            unitPrice: unitPrice,
+            taxRate: taxRate,
+            discountAmount: discountAmount,
+            discountType: "percentage",
+            serviceChargeAmount: serviceChargeAmount,
+            serviceChargeType: "percentage"
+        };
 
-                };
-                var jsonString = JSON.stringify(dataToStore);
-                localStorage.setItem('VOIDED ORDERS', jsonString);
-                if (popupResult.confirmed) {
-                    super.removeOrderline(line);
+        return dataToStore;
+    },
+    isFiscalPrinted() {
+        if (this.pos.get_order().is_refund && this.pos.get_order().rf_no !== "") {
+            return true;
+        }
+
+        if (!this.pos.get_order().is_refund && this.pos.get_order().fs_no !== "") {
+            return true;
+        }
+
+        return false;
+    },
+    async removeOrderline(line) {
+        if (this.isFiscalPrinted()) {
+            this.env.services.notification.add("Not allowed to modify a order with a printed fiscal receipt", {
+                type: 'danger',
+                sticky: false,
+                timeout: 10000,
+            });
+            return;
+        }
+        if (this.pos.config.module_pos_restaurant) {
+            let changes = Object.values(this.pos.get_order().changesToOrder());
+            let found = false;
+            let orderedQty = 0;
+
+            if (changes.length != 0) {
+                for (let i = 0; i < changes.length; i++) {
+                    const change = changes[i];
+                    for (let j = 0; j < change.length; j++) {
+                        const element = change[j];
+                        if (element.product_id == this.pos.get_order().get_selected_orderline().get_product().id) {
+                            orderedQty = element.quantity;
+                            found = true;
+                            break;
+                        }
+                    }
                 }
-                else if (popupResult.error) {
-                    this.env.services.notification.add(popupResult.error, {
+            }
+
+            if (found) {
+                if (this.pos.config.disable_remove_order_line_basic_right) {
+                    if (this.pos.get_cashier().role === 'manager') {
+                        const popupResult = await this.env.services.popup.add(VoidReasonPopup, {
+                            title: _t("Void Orderline"),
+                            orderedQty: orderedQty
+                        });
+
+                        let all_data = []
+                        var jsonString = JSON.stringify(this.get_data_to_store());
+                        var existingData = localStorage.getItem('VOIDED_ORDERS');
+                        if (existingData) {
+                            let parsedData = JSON.parse(existingData);
+                            all_data.push(...parsedData)
+                        }
+                        all_data.push(JSON.parse(jsonString))
+                        localStorage.setItem('VOIDED_ORDERS', JSON.stringify(all_data));
+
+                        if (popupResult.confirmed) {
+                            super.removeOrderline(line);
+                        }
+                        else if (popupResult.error) {
+                            this.env.services.notification.add(popupResult.error, {
+                                type: 'danger',
+                                sticky: false,
+                                timeout: 10000,
+                            });
+                        }
+                    }
+                    else {
+                        this.env.services.notification.add("Access Denied", {
+                            type: 'danger',
+                            sticky: false,
+                            timeout: 10000,
+                        });
+                    }
+                }
+                else {
+                    const popupResult = await this.env.services.popup.add(VoidReasonPopup, {
+                        title: _t("Void Orderline"),
+                        orderedQty: orderedQty
+                    });
+                    let all_data = []
+                    var jsonString = JSON.stringify(this.get_data_to_store());
+                    var existingData = localStorage.getItem('VOIDED_ORDERS');
+                    if (existingData) {
+                        let parsedData = JSON.parse(existingData);
+                        all_data.push(...parsedData)
+                    }
+                    all_data.push(JSON.parse(jsonString))
+                    localStorage.setItem('VOIDED_ORDERS', JSON.stringify(all_data));
+                    if (popupResult.confirmed) {
+                        super.removeOrderline(line);
+                    }
+                }
+            } else {
+                super.removeOrderline(line);
+            }
+        }
+        else {
+            if (this.pos.config.disable_remove_order_line_basic_right) {
+                if (this.pos.get_cashier().role === 'manager') {
+                    const popupResult = await this.env.services.popup.add(VoidReasonPopup, {
+                        title: _t("Void Orderline"),
+                        orderedQty: 1
+                    });
+
+                    let all_data = []
+                    var jsonString = JSON.stringify(this.get_data_to_store());
+                    var existingData = localStorage.getItem('VOIDED_ORDERS');
+                    if (existingData) {
+                        let parsedData = JSON.parse(existingData);
+                        all_data.push(...parsedData)
+                    }
+                    all_data.push(JSON.parse(jsonString))
+                    localStorage.setItem('VOIDED_ORDERS', JSON.stringify(all_data));
+
+                    if (popupResult.confirmed) {
+                        super.removeOrderline(line);
+                    }
+                }
+                else {
+                    this.env.services.notification.add("Access Denied", {
                         type: 'danger',
                         sticky: false,
                         timeout: 10000,
@@ -89,14 +231,25 @@ patch(Order.prototype, {
                 }
             }
             else {
-                this.env.services.notification.add("Access Denied", {
-                    type: 'danger',
-                    sticky: false,
-                    timeout: 10000,
+                const popupResult = await this.env.services.popup.add(VoidReasonPopup, {
+                    title: _t("Void Orderline"),
+                    orderedQty: 1
                 });
+
+                let all_data = []
+                var jsonString = JSON.stringify(this.get_data_to_store());
+                var existingData = localStorage.getItem('VOIDED_ORDERS');
+                if (existingData) {
+                    let parsedData = JSON.parse(existingData);
+                    all_data.push(...parsedData)
+                }
+                all_data.push(JSON.parse(jsonString))
+                localStorage.setItem('VOIDED_ORDERS', JSON.stringify(all_data));
+
+                if (popupResult.confirmed) {
+                    super.removeOrderline(line);
+                }
             }
-        } else {
-            super.removeOrderline(line);
         }
     },
     async printChanges(cancelled) {
@@ -159,10 +312,10 @@ patch(Order.prototype, {
         // Iterate through the array and check the "priceWithTax" property
         for (const obj of array) {
             // Check if the object has the "priceWithTax" property
-            if (typeof obj.priceWithTax === 'number') {
-                if (obj.priceWithTax > 0) {
+            if (typeof obj === 'number') {
+                if (obj > 0) {
                     hasPositive = true;
-                } else if (obj.priceWithTax < 0) {
+                } else if (obj < 0) {
                     hasNegative = true;
                 }
             }
@@ -176,44 +329,96 @@ patch(Order.prototype, {
         // If only positive or negative values are found, return true
         return true;
     },
+    isSaleOrder(array) {
+        // Check if the input is an array
+        if (!Array.isArray(array)) {
+            return false; // Return false if it's not an array
+        }
+
+        // Initialize a variable to track the sign of the first encountered number
+        let initialSign = null;
+
+        // Iterate through the array
+        for (const obj of array) {
+            // Check if the object has the "priceWithTax" property and it's a number
+            if (typeof obj === 'number') {
+                // Determine the sign of the first encountered number
+                if (initialSign === null) {
+                    initialSign = Math.sign(obj);
+                } else if (Math.sign(obj) !== initialSign) {
+                    // If a different sign is encountered, return false
+                    return false;
+                }
+            }
+        }
+
+        // If the loop completes without returning false, check the sign of the encountered numbers
+        // Return true if all are positive, false otherwise (including all negative or no numbers at all)
+        return initialSign === 1;
+    },
     async pay() {
         let self = this;
         let order = this.pos.get_order();
         let lines = order.get_orderlines();
         let restrict_order = false;
+        let bad_tax = false;
         var product_names = ''
+        var bad_tax_product_names = ''
 
-        const pricesArray = lines.map(element => element.get_all_prices());
+        const quantitys = lines.map(element => element.get_quantity());
 
-        if (this.isValidArray(pricesArray)) {
+        if (this.isValidArray(quantitys)) {
             if (this.pos.get_cashier().role === 'manager') {
                 if (order && lines.length > 0) {
                     lines.forEach(function (line) {
-                        if (line.get_display_price() == 0.00) {
+                        if (line.get_display_price() == 0.00 || line.price < 0.00) {
                             restrict_order = true;
                             product_names += '-' + line.product.display_name + "\n"
+                        }
+                        if (line.product.taxes_id !== undefined && line.product.taxes_id.length > 1) {
+                            bad_tax = true;
+                            bad_tax_product_names += '-' + line.product.display_name + "\n"
                         }
                     });
                 }
                 else {
                     restrict_order = true;
                 }
-                if (restrict_order) {
-                    if (product_names) {
+
+                if (restrict_order || bad_tax) {
+                    if (restrict_order) {
+                        if (product_names) {
+                            self.env.services.popup.add(ErrorPopup, {
+                                'title': _t("Product With 0 Price"),
+                                'body': _t('You are not allowed to have the zero prices on the order line.\n %s', product_names),
+                            });
+                        }
+                        else {
+                            self.env.services.popup.add(ErrorPopup, {
+                                'title': _t("Empty Order"),
+                                'body': _t('There must be at least one product in your order before it can be validated.'),
+                            });
+                        }
+                    }
+
+                    if (bad_tax) {
                         self.env.services.popup.add(ErrorPopup, {
                             'title': _t("Product With 0 Price"),
-                            'body': _t('You are not allowed to have the zero prices on the order line . %s', product_names),
-                        });
-                    }
-                    else {
-                        self.env.services.popup.add(ErrorPopup, {
-                            'title': _t("Empty Order"),
-                            'body': _t('There must be at least one product in your order before it can be validated.'),
+                            'body': _t('Products with multiple tax rates detected.\n %s', product_names),
                         });
                     }
                 }
                 else {
-                    super.pay();
+                    // Check if the sale/refund state matches the POS mode
+                    let isSale = this.isSaleOrder(quantitys);
+                    if (isSale !== !this.pos.is_refund_order()) {
+                        self.env.services.popup.add(ErrorPopup, {
+                            'title': _t("Order Mode Conflict"),
+                            'body': _t('The order type does not match the POS mode. Ensure all items are appropriate for a sale or refund.'),
+                        });
+                    } else {
+                        super.pay();
+                    }
                 }
             }
             else {
@@ -267,20 +472,29 @@ patch(Order.prototype, {
     get_fiscal_mrc_no() {
         return this.fiscal_mrc;
     },
+    get_payment_qr_code() {
+        return this.payment_qr_code_str;
+    },
+    set_payment_qr_code(qr_code_str) {
+        this.payment_qr_code_str = qr_code_str;
+    },
     async printFiscalReceipt() {
+        if (!await this.pos.correctTimeConfig()) {
+            return;
+        }
+
         var receiptData = this.export_for_printing();
         receiptData.tenant = "odoo17";
         receiptData.client = this.get_partner();
 
-        console.log("RECEIPT DATA");
-        console.log(receiptData);
+        //var einvoice_qrcode = this.pos.base_url + "/pos/ticket/validate?access_token=" + this.access_token;
 
         let customer = {};
 
         if (receiptData.client != null) {
             customer.customerName = receiptData.client.name;
             customer.customerTradeName = "";
-            customer.customerTIN = receiptData.client.vat;
+            customer.customerTIN = receiptData.client.vat ? receiptData.client.vat : "";
             customer.customerPhoneNo = receiptData.client.phone;
         }
 
@@ -288,10 +502,12 @@ patch(Order.prototype, {
         let isRefundOrder = this.pos.is_refund_order();
         this.set_is_refund_order(isRefundOrder);
 
+        // this.set_payment_qr_code("This is a place for Payment QR code only");
+
         let extractedOrderlines = orderlinesFromOrder.map(orderline => {
             return {
                 id: orderline.product.id,
-                pluCode: orderline.product.default_code ? orderline.product.default_code : "00007",
+                pluCode: orderline.product.default_code ? orderline.product.default_code : "0000",
                 productName: orderline.product.display_name,
                 productDescription: orderline.product.description ? orderline.product.description : orderline.product.display_name + " Description",
                 quantity: orderline.quantity,
@@ -305,17 +521,20 @@ patch(Order.prototype, {
             };
         });
 
-        console.log(this.pos.config);
-        console.log("GLOBAL DISCOUNT");
-        console.log(this.pos.config.module_pos_discount ? this.pos.config.discount_pc : 0);
+        var local_data = localStorage.getItem('VOIDED_ORDERS');
+        var voided_filtered_data = [];
+        if (local_data) {
+            var parsedData = JSON.parse(local_data);
+            voided_filtered_data = parsedData.filter(item => item.name === this.name);
+        }
 
         var forSunmi = {
             orderlines: extractedOrderlines,
-            voidedOrderLines: [],
+            voidedOrderLines: voided_filtered_data,
             customer: customer,
-            paymentType: "cash",
+            paymentType: (receiptData.paymentlines && receiptData.paymentlines.length > 0) ? receiptData.paymentlines[0].name : "CASH",
             paidAmount: receiptData.total_paid,
-            qrCode: "",
+            qrCode: this.get_payment_qr_code(),
             change: receiptData.change,
             headerText: receiptData.headerData.header !== false ? receiptData.headerData.header : "",
             footerText: receiptData.footer !== false ? receiptData.footer : "",
@@ -325,7 +544,7 @@ patch(Order.prototype, {
             globalServiceChargeAmount: this.pos.config.pos_module_pos_service_charge ? this.pos.config.global_service_charge : 0,
             globalDiscountType: "Percentage",
             globalDiscountAmount: this.pos.config.module_pos_discount ? this.pos.config.discount_pc : 0,
-            commercialLogo: ""
+            commercialLogo: this.pos.config.self_ordering_image_brand
         };
 
         if (window.Android != undefined) {
@@ -334,9 +553,11 @@ patch(Order.prototype, {
                 var result;
                 if (isRefundOrder) {
                     result = window.Android.printRefundInvoice(JSON.stringify(forSunmi));
+                    this.pos.makeLogEntry("Printing Refund Invoice Request => " + JSON.stringify(forSunmi));
                 }
                 else {
                     result = window.Android.printSalesInvoice(JSON.stringify(forSunmi));
+                    this.pos.makeLogEntry("Printing Sales Invoice Request => " + JSON.stringify(forSunmi));
                 }
 
                 var responseObject = JSON.parse(result);
@@ -351,33 +572,48 @@ patch(Order.prototype, {
                         this.set_fs_no(responseObject.fsNo);
                     }
                     this._printed = true;
-                    //console.log("to save to POS ===> " + JSON.stringify(printData));
-                    //this.currentOrder.setFiscalPrinterDate(printData);
-                    //await this.setPrintStatus(printData);
+
+                    this.pos.makeLogEntry("Fiscal Receipt Printing Successfully");
+
+                    var get_existing_data = localStorage.getItem('VOIDED_ORDERS');
+                    if (get_existing_data) {
+                        var parsedData = JSON.parse(get_existing_data);
+                        var updatedData = parsedData.filter(item => item.name !== this.name);
+                        localStorage.setItem('VOIDED_ORDERS', JSON.stringify(updatedData));
+                    }
+
+                    return true;
                 } else {
+                    if (responseObject.printedInvoice) {
+                        const { confirmed } = await this.env.services.popup.add(ConfirmPopup, {
+                            title: _t("Printed Invoice"),
+                            body: _t("%s has been printed before. Do you want a non-fiscal reprint?", forSunmi.ref),
+                        });
+                        if (confirmed) {
+                            if (this.is_refund) {
+                                result = window.Android.rePrintRefundInvoice(forSunmi.ref);
+                                this.pos.makeLogEntry("RePrint Refund Invoice Request => " + forSunmi.ref);
+                            }
+                            else {
+                                result = window.Android.rePrintSalesInvoice(forSunmi.ref);
+                                this.pos.makeLogEntry("RePrint Sales Invoice Request => " + forSunmi.ref);
+                            }
+                            return true;
+                        }
+                        return true;
+                    }
+
                     this._printed = false;
 
-                    if (responseObject.printedInvoice) {
-                        this.env.services.notification.add("Fiscal Printing Failed", {
-                            type: 'danger',
-                            sticky: false,
-                            timeout: 10000,
-                        });
+                    this.env.services.notification.add(responseObject.message, {
+                        type: 'danger',
+                        sticky: false,
+                        timeout: 10000,
+                    });
 
-                    } else {
-                        this.env.services.notification.add(responseObject.message, {
-                            type: 'danger',
-                            sticky: false,
-                            timeout: 10000,
-                        });
-
-                    }
+                    this.pos.makeLogEntry("Fiscal Receipt Printing Failed");
+                    return false;
                 }
-                console.log("===========> Response From POS Device");
-                console.log("success => " + responseObject.success);
-                console.log("message => " + responseObject.message);
-                console.log(result);
-                return responseObject.success;
             }
             else {
                 return false;
@@ -389,9 +625,23 @@ patch(Order.prototype, {
                 sticky: false,
                 timeout: 10000,
             });
+            return false;
         }
-
-    }
+    },
+    // async add_product(product, options) {
+    //     if (this.pos.get_order().isFiscalPrinted()) {
+    //         this.env.services.notification.add("Not allowed to modify a order with a printed fiscal receipt", {
+    //             type: 'danger',
+    //             sticky: false,
+    //             timeout: 10000,
+    //         });
+    //         return;
+    //     }
+    //     else {
+    //         const result = super.add_product(...arguments);
+    //         return result;
+    //     }
+    // }
 });
 
 patch(Orderline.prototype, {
@@ -419,6 +669,16 @@ patch(Orderline.prototype, {
         return orderlineClone;
     },
     set_service_charge(service_charge) {
+        // if(this.pos.get_order()!=undefined){
+        //     if (this.pos.get_order().isFiscalPrinted()) {
+        //         this.env.services.notification.add("Not allowed to modify a order with a printed fiscal receipt", {
+        //             type: 'danger',
+        //             sticky: false,
+        //             timeout: 10000,
+        //         });
+        //         return;
+        //     }
+        // }
         var parsed_service_charge =
             typeof service_charge === "number"
                 ? service_charge
@@ -432,7 +692,7 @@ patch(Orderline.prototype, {
     get_all_prices(qty = this.get_quantity()) {
         // console.log("=== this.order.state ===> ", (this.order.state != 'done' || this.order.state != 'paid'));
         var self = this;
-        if(!this.order.is_refund && (this.order.state != 'done' || this.order.state != 'paid')){
+        if (!this.order.is_refund && (this.order.state != 'done' || this.order.state != 'paid')) {
             if (this.order.pos.config.pos_module_pos_service_charge) {
                 this.order.orderlines.forEach(function (line) {
                     line.set_service_charge(self.order.pos.config.global_service_charge);

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-name="pos_etta.TicketScreen" t-inherit="point_of_sale.TicketScreen" t-inherit-mode="extension">
+        
+        <xpath expr="//div[hasclass('header-row')]//div[@name='delete']" position="before">
+            <div class="col wide p-2">FS/RF</div>
+        </xpath>
+
+        <xpath expr="//div[hasclass('order-row')]//div[@name='delete']" position="before">
+            <div class="col wide p-2 ">
+                <div t-if="order.is_refund"><t t-esc="order.rf_no"></t></div>
+                <div t-if="!order.is_refund"><t t-esc="order.fs_no"></t></div>
+            </div>
+        </xpath>
+
+    </t>
+
+</templates>

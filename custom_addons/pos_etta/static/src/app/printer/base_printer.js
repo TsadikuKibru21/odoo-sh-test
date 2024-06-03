@@ -18,20 +18,26 @@ patch(BasePrinter.prototype, {
         while (this.receiptQueue.length > 0) {
             receipt = this.receiptQueue.shift();
             let escposReceipt = this.generateKitchenOrderReceipt(receipt, printer);
-            // image = this.processCanvas(
-            //     await htmlToCanvas(receipt, { addClass: "pos-receipt-print" })
-            // );
             try {
-                // printResult = await this.sendPrintingJob(image);
                 let merged = {
                     printer: printer,
                     receipt: escposReceipt
                 };
 
+                // console.log("TO BE SENT TO THERMAL PRINTER");
+                // console.log(merged);
+
                 if (window.Android.isAndroidPOS()) {
-                    var result = window.Android.printTcp(merged);
+
+                    window.handleOrderPrintResponse = function(response) {
+                        // console.log(JSON.parse(response));
+                    }
+                    
+                    var result = window.Android.printTcp(JSON.stringify(merged));
+
                     var responseObject = JSON.parse(result);
-                    console.log(responseObject);
+                    
+                    // console.log(responseObject);
                 }
                 else {
                     this.env.services.notification.add("Invalid Device", {
@@ -58,21 +64,39 @@ patch(BasePrinter.prototype, {
         return this.rpc(`${this.url}/orderpinter/printorder`, { receipt, printer });
     },
     generateKitchenOrderReceipt(orderData, printer) {
-        let receiptText = "[C]<u><font size='big'>" + printer.name + "</font></u>\n[L]\n";
-
-        receiptText += "<b>Table:</b> " + orderData.table_name + "<br/>\n";
-        receiptText += "<b>Floor:</b> " + orderData.floor_name + "<br/>\n";
-        receiptText += "<b>Order Number:</b> " + orderData.name + "<br/>\n";
-        receiptText += "<b>Cashier:</b> " + orderData.cashier + "<br/>\n";
-        receiptText += "<b>Date:</b> " + orderData.date + "<br/>\n";
-        receiptText += "<b>Time:</b> " + orderData.time.hours + ":" + orderData.time.minutes + "<br/>\n";
-        receiptText += "[L]\n--------------------------------\n[L]\n";
-        receiptText += "<b>ITEMS:</b>\n[L]\n";
-
-        orderData.new.forEach(item => {
-            receiptText += item.name + " x " + item.quantity + "\n";
-        });
-
+        let receiptText = "\x1B\x40";
+        receiptText += "\x1B\x21\x1C"; // Set font size to double width and double height
+        receiptText += "[C]" + printer.name + "\n";
+        receiptText += "\x1B\x21\x00"; // Reset font size
+        receiptText += "------------------------------------------------\n";
+    
+        receiptText += "[L]<b>Table:</b> " + orderData.table_name + "\n";
+        receiptText += "[L]<b>Floor:</b> " + orderData.floor_name + "\n";
+        receiptText += "[L]<b>Order Number:</b> " + orderData.name + "\n";
+        receiptText += "[L]<b>Cashier:</b> " + orderData.cashier + "\n";
+        receiptText += "[L]<b>Date:</b> " + orderData.date + "\n";
+        receiptText += "[L]<b>Time:</b> " + orderData.time.hours + ":" + orderData.time.minutes + "\n";
+    
+        if (orderData.new != undefined && orderData.new && orderData.new.length > 0) {
+            receiptText += "------------------------------------------------\n";
+            receiptText += "[L]<b>NEW ITEMS:</b>\n";
+            orderData.new.forEach(item => {
+                receiptText += "[L]" + item.name + " x " + item.quantity + "\n";
+            });
+        }
+    
+        if (orderData.cancelled != undefined && orderData.cancelled && orderData.cancelled.length > 0) {
+            receiptText += "------------------------------------------------\n";
+            receiptText += "[L]<b>CANCELLED ITEMS:</b>\n";
+            orderData.cancelled.forEach(item => {
+                receiptText += "[L]" + item.name + " x " + item.quantity + "\n";
+            });
+        }
+    
+        receiptText += "\n\n\n";
+        receiptText += "[L]\n";
+        receiptText +="[L]\n";
+    
         return receiptText;
     }
 });

@@ -4,3 +4,6 @@ from . import pos_session
 from . import voidmodel
 from . import pos_orderline
 from . import product_template
+from . import hr_employee
+from . import res_users
+from . import LoggingModel

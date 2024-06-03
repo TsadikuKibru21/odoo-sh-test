@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates>
+    <t t-name="Navbar" t-inherit="point_of_sale.Navbar" t-inherit-mode="extension" owl="1">
+    
+        <xpath expr="//div[contains(@class, 'status-buttons')]" position="replace">
+                    <div class="status-buttons d-flex flex-grow-1 flex-basis-0 justify-content-end h-100">
+            <t t-if="showCashier()">
+                <CashierName/>
+            </t>
+            </div>
+        </xpath>
+    </t>
+</templates>

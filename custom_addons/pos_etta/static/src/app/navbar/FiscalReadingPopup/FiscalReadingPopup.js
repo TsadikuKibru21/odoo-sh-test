@@ -12,25 +12,18 @@ export class FiscalReadingPopup extends AbstractAwaitablePopup {
     setup() {
         super.setup();
         this.env.services.notification = useService('notification');
-        // this.notification = useService("pos_notification");
         this.popup = useService("popup");
-        this.orm = useService("orm");
         this.pos = usePos();
-        this.hardwareProxy = useService("hardware_proxy");
-        this.printer = useService("printer");
         this.state = useState({
             byDateRange: true,
             showNumberFields: false,
             showDateFields: true, // Show date fields by default
             fromDate: this.formatDate(new Date()), // Assuming formatDate is a method you've defined
             toDate: this.formatDate(new Date()),
-            fromZno: null,
-            toZno: null,
-            detailed: false
+            fromZno: 0,
+            toZno: 0,
+            summary: false
         });
-        // Access customers from the POS model
-        this.state.customers = this.pos.db.get_partners_sorted();
-        this.state.selectedCustomer = null;
     }
 
     // Helper function to format the date as a string
@@ -60,11 +53,11 @@ export class FiscalReadingPopup extends AbstractAwaitablePopup {
 
     // Method to validate the input before printing
     validateInputBeforePrint() {
-        if (!this.state.byDateRange && (this.state.fromZno >= this.state.toZno)) {
-            this.state.errorMessage = "Invalid Input \"From Z No\" cannot be greater or equal to \"To Z No\"";
+        if (!this.state.byDateRange && (this.state.fromZno > this.state.toZno)) {
+            this.state.errorMessage = "Invalid Input \"From Z No\" cannot be greater than \"To Z No\"";
             return false;
-        } else if (this.state.byDateRange && (new Date(this.state.fromDate) >= new Date(this.state.toDate))) {
-            this.state.errorMessage = "Invalid Input \"From Date\" cannot be greater or equal to \"To Date\"";
+        } else if (this.state.byDateRange && (new Date(this.state.fromDate) > new Date(this.state.toDate))) {
+            this.state.errorMessage = "Invalid Input \"From Date\" cannot be greater than \"To Date\"";
             return false;
         }
         this.state.errorMessage = null;
@@ -82,10 +75,10 @@ export class FiscalReadingPopup extends AbstractAwaitablePopup {
                 to_date: this.state.toDate,
                 from_zno: this.state.fromZno,
                 to_zno: this.state.toZno,
-                detailed: this.state.detailed
+                detailed: this.state.summary
             };
 
-            console.log(JSON.stringify(output));
+            // console.log(JSON.stringify(output));
 
             try {
                 // Call the printFiscalReports method and wait for it to complete
@@ -100,7 +93,7 @@ export class FiscalReadingPopup extends AbstractAwaitablePopup {
                 super.cancel()
 
             } catch (error) {
-                console.error("Error during printing:", error);
+                // console.error("Error during printing:", error);
                 // Handle any errors that occur during the printFiscalReports call
                 // Optionally, show an error message to the user
             }
@@ -124,38 +117,52 @@ export class FiscalReadingPopup extends AbstractAwaitablePopup {
     }
 
     async printFiscalReports(result) {
+        var check = await this.pos.correctTimeConfig();
+        if (!await this.pos.correctTimeConfig()) {
+            return;
+        }
+        
         const _t = this.env && this.env._t ? this.env._t : (key) => key;
 
         if (window.Android !== undefined && window.Android.isAndroidPOS()) {
             try {
                 const posResult = await window.Android.printFiscalReports(JSON.stringify(result));
-                const responseObject = JSON.parse(posResult);
 
+                this.pos.makeLogEntry("Fiscal Report Printing Request => " + JSON.stringify(result));
+
+                const responseObject = JSON.parse(posResult);
                 if (responseObject.success) {
                     this.env.services.notification.add("Fiscal Report Printed", {
                         type: 'info',
                         sticky: false,
                         timeout: 10000,
                     });
+
+                    this.pos.makeLogEntry("Fiscal Report Printed");
+
                 } else {
                     this.env.services.notification.add("Fiscal Report Printing Failed", {
                         type: 'danger',
                         sticky: false,
                         timeout: 10000,
                     });
+
+                    this.pos.makeLogEntry("Fiscal Report Printing Failed");
                 }
                 return responseObject;
             } catch (error) {
-                console.error('An error occurred while printing fiscal reports:', error);
+                this.pos.makeLogEntry("Fiscal Report Printing Failed");
+                // console.error('An error occurred while printing fiscal reports:', error);
                 this.env.services.notification.add("Error occured during fiscal report printing", {
                     type: 'danger',
                     sticky: false,
                     timeout: 10000,
                 });
                 throw error;
+
             }
         } else {
-            console.log('Invalid device');
+            // console.log('Invalid device');
             this.env.services.notification.add("Invalid device", {
                 type: 'danger',
                 sticky: false,
