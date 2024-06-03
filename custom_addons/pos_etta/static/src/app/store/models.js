@@ -56,6 +56,7 @@ patch(Order.prototype, {
         return jsonResult;
     },
     get_data_to_store() {
+        let changes = Object.values(this.pos.get_order().changesToOrder());
         let orderedQty = 1;
         if (this.pos.config.module_pos_restaurant) {
             if (changes.length != 0) {
