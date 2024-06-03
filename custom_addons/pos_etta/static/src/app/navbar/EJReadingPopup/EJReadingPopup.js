@@ -144,7 +144,7 @@ export class EJReadingPopup extends AbstractAwaitablePopup {
                             timeout: 10000,
                         });
 
-                        this.pos.makeLogEntry("EJ Report Printing Failed");
+                        this.pos.makeLogEntry("EJ Report Printing Failed " + element.message);
                     }
                 });
 
