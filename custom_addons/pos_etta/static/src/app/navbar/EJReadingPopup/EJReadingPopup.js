@@ -138,7 +138,7 @@ export class EJReadingPopup extends AbstractAwaitablePopup {
                         this.pos.makeLogEntry(element.message);
 
                     } else {
-                        this.env.services.notification.add("EJ Report Printing Failed", {
+                        this.env.services.notification.add("ERROR " + element.message, {
                             type: 'danger',
                             sticky: false,
                             timeout: 10000,
