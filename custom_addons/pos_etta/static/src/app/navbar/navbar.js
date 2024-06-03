@@ -4,8 +4,6 @@ import { Navbar } from "@point_of_sale/app/navbar/navbar";
 import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
 import { FiscalReadingPopup } from "./FiscalReadingPopup/FiscalReadingPopup";
-import { jsonrpc } from "@web/core/network/rpc_service";
-
 
 patch(Navbar.prototype, {
     get isRefund() {
