@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="account_hremp_view_form_inherit" model="ir.ui.view">
+        <field name="name">hremp.movewith.inherited</field>
+        <field name="model">hr.employee</field>
+        <field name="inherit_id" ref="hr.view_employee_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='job_id']" position="after">
+                <field name="x_studio_csh_account"/>
+            </xpath>
+        </field>
+    </record>
+
+
+    <record id="account_pay_view_form_inherit" model="ir.ui.view">
+        <field name="name">accpay.movewith.inherited</field>
+        <field name="model">account.payment</field>
+        <field name="inherit_id" ref="account.view_account_payment_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='date']" position="after">
+                <field name="x_studio_reconcilation_id"/>
+                <field name="x_studio_payment_method_1"/>
+                <field name="x_studio_sales_payment_type"/>
+
+            </xpath>
+        </field>
+    </record>
+
+    <record id="account_saleinv_view_form_inherit" model="ir.ui.view">
+        <field name="name">hremp.saleinv.inherited</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='date_order']" position="after">
+                <field name="x_studio_inv_id"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
+

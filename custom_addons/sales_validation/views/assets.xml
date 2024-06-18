@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+ <template id="lewis_retails_sales_validation_assets_backend" inherit_id="web.assets_backend" name="lewis_retails_emr_assets">
+        <xpath expr="." position="inside">
+        	<link href="/ation/static/src/css/angular-material.css" rel="stylesheet"/>
+            <link href="/sales_validation/static/src/css/styles.css" rel="stylesheet"/>
+            
+            
+        </xpath>
+    </template>
+   
+</odoo>
