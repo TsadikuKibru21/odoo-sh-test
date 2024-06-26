@@ -5,6 +5,7 @@ _logger = logging.getLogger(__name__)
 from odoo.exceptions import ValidationError, UserError
 from odoo.tools import float_repr, float_compare
 from datetime import timedelta
+import json
 
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
@@ -111,17 +112,101 @@ class PosOrderInherit(models.Model):
     _inherit = 'pos.order'
 
     is_refund = fields.Boolean(string="Is Refund", help="Is a Refund Order")
+    checked = fields.Boolean(string="Checked Cash", help="Cash received from waiter")
     fs_no = fields.Char('FS No')
     rf_no = fields.Char('RF No')
     ej_checksum = fields.Char('EJ Checksum')
     fiscal_mrc = fields.Char('MRC')
     payment_qr_code_str = fields.Char('Payment QR Code')
+    service_charge_amount = fields.Monetary(string='Service Charge', readonly=True, stored=True, compute='_compute_service_charge_amount', group_operator='sum')
+    synced_mrc = fields.Text(string='Synced MRC')
+    synced_mrc_list = fields.Char(compute='_convert_synced_mrc_to_list', inverse='_convert_synced_mrc_to_text')
 
+    @api.model
+    def set_order_checked(self, order_id):
+        order = self.search([('pos_reference', '=', order_id)], limit=1)
+        if order:
+            order.update({
+                'checked': True
+            })
+            return True
+        return False
+            
+    @api.model
+    def get_orders_without_fs_no(self, search_string):
+        orders = self.search([
+            '|', '|', '|',
+                ('fs_no', '=', False),
+                ('fiscal_mrc', '=', False),
+                ('ej_checksum', '=', False),
+                ('synced_mrc', '=', False),
+            ("amount_total", ">", 0)
+        ])
+        def string_not_in_synced_mrc(order):
+            synced_mrc_list = json.loads(order.synced_mrc or '[]')
+            return search_string not in synced_mrc_list
+        
+        filtered_orders = orders.filtered(string_not_in_synced_mrc)
+        
+        return filtered_orders.mapped('pos_reference')
+
+    @api.model
+    def get_orders_without_rf_no(self, search_string):
+        orders = self.search([
+            '|', '|', '|',
+                ('rf_no', '=', False),
+                ('fiscal_mrc', '=', False),
+                ('ej_checksum', '=', False),
+                ('synced_mrc', '=', False),
+            ("amount_total", ">", 0)
+        ])
+        def string_not_in_synced_mrc(order):
+            synced_mrc_list = json.loads(order.synced_mrc or '[]')
+            return search_string not in synced_mrc_list
+        
+        filtered_orders = orders.filtered(string_not_in_synced_mrc)
+        
+        return filtered_orders.mapped('pos_reference')
+    
+    @api.model
+    def add_to_synced_mrc(self, pos_reference, fiscal_mrc):
+        orders = self.search([('pos_reference', '=', pos_reference)])
+        for order in orders:
+            synced_mrc_list = json.loads(order.synced_mrc or '[]')
+            if fiscal_mrc not in synced_mrc_list:
+                synced_mrc_list.append(fiscal_mrc)
+                order.synced_mrc = json.dumps(synced_mrc_list)
+
+    @api.model
+    def _convert_synced_mrc_to_list(self):
+        for order in self:
+            if order.synced_mrc:
+                order.synced_mrc_list = json.loads(order.synced_mrc)
+
+    @api.model
+    def _convert_synced_mrc_to_text(self):
+        for order in self:
+            if order.synced_mrc_list:
+                order.synced_mrc = json.dumps(order.synced_mrc_list)
+        
+    @api.depends('lines.price_subtotal', 'lines.service_charge')
+    def _compute_service_charge_amount(self):
+        for order in self:
+            total_service_charge = 0.0
+            for line in order.lines:
+                # Calculate the base amount without the service charge
+                base_amount = line.price_subtotal / (1 + (line.service_charge or 0.0) / 100.0)
+                # Calculate the service charge amount
+                service_charge = base_amount * (line.service_charge or 0.0) / 100.0
+                total_service_charge += service_charge
+            order.service_charge_amount = total_service_charge
+            
     @api.model
     def _order_fields(self, ui_order):
         vals = super(PosOrderInherit, self)._order_fields(ui_order)
         vals.update({
             'is_refund': ui_order.get('is_refund', False),
+            'checked': ui_order.get('checked', False),
             'fs_no': ui_order.get('fs_no', ''),
             'rf_no': ui_order.get('rf_no', ''),
             'ej_checksum': ui_order.get('ej_checksum', ''),
@@ -129,10 +214,10 @@ class PosOrderInherit(models.Model):
             'payment_qr_code_str': ui_order.get('payment_qr_code_str', ''),
         })
 
-        if 'date_order' in vals:
-            date_order = fields.Datetime.from_string(vals['date_order'])
-            date_order += timedelta(hours=3)
-            vals['date_order'] = fields.Datetime.to_string(date_order)
+        # if 'date_order' in vals:
+        #     date_order = fields.Datetime.from_string(vals['date_order'])
+        #     date_order += timedelta(hours=3)
+        #     vals['date_order'] = fields.Datetime.to_string(date_order)
 
         return vals
     
@@ -262,6 +347,7 @@ class PosOrderInherit(models.Model):
         result = super(PosOrderInherit, self)._export_for_ui(order)
         result.update({
             'is_refund': order.is_refund,
+            'checked': order.checked,
             'fs_no': order.fs_no,
             'rf_no': order.rf_no,
             'ej_checksum': order.ej_checksum,
@@ -300,6 +386,7 @@ class PosOrderLineInherit(models.Model):
 
     @api.onchange('qty', 'discount', 'price_unit', 'tax_ids', 'service_charge')
     def _onchange_qty(self):
+        self._compute_amount_line_all()
         if self.product_id:
             # Calculate the price after applying the discount
             price_after_discount = self.price_unit * (1 - (self.discount or 0.0) / 100.0)

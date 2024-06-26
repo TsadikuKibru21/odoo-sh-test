@@ -66,43 +66,34 @@ export class FiscalReadingPopup extends AbstractAwaitablePopup {
 
     // This method is called when the Print button is clicked
     async onPrintButtonClick() {
+        await this.pos.doAuthFirst('fr_pin_access_level', 'fr_pin_lock_enabled', 'fiscal_read', async () => {
+            if (this.validateInputBeforePrint()) {
+                // If there's no validation error, create a JSON object
+                const output = {
+                    by_date_range: this.state.byDateRange,
+                    from_date: this.state.fromDate,
+                    to_date: this.state.toDate,
+                    from_zno: this.state.fromZno,
+                    to_zno: this.state.toZno,
+                    detailed: this.state.summary
+                };
 
-        if (this.validateInputBeforePrint()) {
-            // If there's no validation error, create a JSON object
-            const output = {
-                by_date_range: this.state.byDateRange,
-                from_date: this.state.fromDate,
-                to_date: this.state.toDate,
-                from_zno: this.state.fromZno,
-                to_zno: this.state.toZno,
-                detailed: this.state.summary
-            };
+                try {
+                    await this.printFiscalReports(output);
+                    super.cancel()
+                } catch (error) {
+                    this.env.services.notification.add(error, {
+                        type: 'success',
+                        sticky: false,
+                        timeout: 10000,
 
-            // console.log(JSON.stringify(output));
-
-            try {
-                // Call the printFiscalReports method and wait for it to complete
-                await this.printFiscalReports(output);
-                // After printFiscalReports completes, show a success notification
-                this.env.services.notification.add("Print job is successfully submitted.", {
-                    type: 'success',
-                    sticky: false,
-                    timeout: 10000,
-
-                });
-                super.cancel()
-
-            } catch (error) {
-                // console.error("Error during printing:", error);
-                // Handle any errors that occur during the printFiscalReports call
-                // Optionally, show an error message to the user
+                    });
+                }
+            } else {
+                this.showErrorMessage();
             }
-        } else {
-            // Show the error message because the input is not valid
-            this.showErrorMessage();
-        }
+        });
     }
-
 
     // Method to display the error message
     showErrorMessage() {
@@ -121,7 +112,7 @@ export class FiscalReadingPopup extends AbstractAwaitablePopup {
         if (!await this.pos.correctTimeConfig()) {
             return;
         }
-        
+
         const _t = this.env && this.env._t ? this.env._t : (key) => key;
 
         if (window.Android !== undefined && window.Android.isAndroidPOS()) {

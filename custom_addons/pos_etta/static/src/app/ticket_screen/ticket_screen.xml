@@ -5,12 +5,20 @@
         
         <xpath expr="//div[hasclass('header-row')]//div[@name='delete']" position="before">
             <div class="col wide p-2">FS/RF</div>
+            <div class="col wide p-2">Cash</div>
         </xpath>
 
         <xpath expr="//div[hasclass('order-row')]//div[@name='delete']" position="before">
             <div class="col wide p-2 ">
                 <div t-if="order.is_refund"><t t-esc="order.rf_no"></t></div>
                 <div t-if="!order.is_refund"><t t-esc="order.fs_no"></t></div>
+            </div>
+            <div class="col wide p-2">
+                <button t-if="!order.is_refund" t-att-class="order.checked === true ? 'btn btn-success' : 'btn btn-danger'" 
+                        t-att-disabled="order.is_refund or (!order.is_refund and !order.fs_no)"
+                        t-on-click="() => this.toggleStatus(order)">
+                    <i t-att-class="order.checked === true ? 'fa fa-check' : 'fa fa-times'"></i>
+                </button>
             </div>
         </xpath>
 

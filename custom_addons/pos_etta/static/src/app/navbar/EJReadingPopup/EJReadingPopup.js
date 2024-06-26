@@ -54,7 +54,7 @@ export class EJReadingPopup extends AbstractAwaitablePopup {
     // Method to validate the input before printing
     validateInputBeforePrint() {
         if (!this.state.byDateRange && (this.state.fromNo > this.state.toNo)) {
-            this.state.errorMessage = "Invalid Input \"From FS No\" cannot be greater than \"To FS No\"";
+            this.state.errorMessage = "Invalid Input \"From No\" cannot be greater than \"To No\"";
             return false;
         } else if (this.state.byDateRange && (new Date(this.state.fromDate) > new Date(this.state.toDate))) {
             this.state.errorMessage = "Invalid Input \"From Date\" cannot be greater than \"To Date\"";
@@ -83,31 +83,31 @@ export class EJReadingPopup extends AbstractAwaitablePopup {
     }
 
     async onPrintButtonClick() {
-        if (this.validateInputBeforePrint()) {
-            // If there's no validation error, create a JSON object
-            const output = {
-                by_date_range: this.state.byDateRange,
-                from_date: this.state.fromDate,
-                to_date: this.state.toDate,
-                from_no: this.state.fromNo,
-                to_no: this.state.toNo,
-                sales: this.state.sales,
-                refund: this.state.refund,
-                payment: this.state.payment_summary,
-            };
-
-            // console.log(JSON.stringify(output));
-
-            try {
-                await this.printElectronicJournalReports(output);
-                super.cancel();
-            } catch (error) {
-                // console.error("Error during printing:", error);
+        await this.pos.doAuthFirst('ej_read_access_level', 'ej_read_pin_lock_enabled', 'ej_read', async () => {
+            if (this.validateInputBeforePrint()) {
+                // If there's no validation error, create a JSON object
+                const output = {
+                    by_date_range: this.state.byDateRange,
+                    from_date: this.state.fromDate,
+                    to_date: this.state.toDate,
+                    from_no: this.state.fromNo,
+                    to_no: this.state.toNo,
+                    sales: this.state.sales,
+                    refund: this.state.refund,
+                    payment: this.state.payment_summary,
+                };
+    
+                try {
+                    await this.printElectronicJournalReports(output);
+                    super.cancel();
+                } catch (error) {
+                    // console.error("Error during printing:", error);
+                }
+    
+            } else {
+                this.showErrorMessage();
             }
-
-        } else {
-            this.showErrorMessage();
-        }
+        });
     }
 
     async printElectronicJournalReports(result) {
@@ -138,14 +138,13 @@ export class EJReadingPopup extends AbstractAwaitablePopup {
                         this.pos.makeLogEntry(element.message);
 
                     } else {
-                        //this.env.services.notification.add("ERROR " + element.message, {
                         this.env.services.notification.add("EJ Report Printing Failed", {
                             type: 'danger',
                             sticky: false,
                             timeout: 10000,
                         });
 
-                        this.pos.makeLogEntry("EJ Report Printing Failed " + element.message);
+                        this.pos.makeLogEntry("EJ Report Printing Failed");
                     }
                 });
 

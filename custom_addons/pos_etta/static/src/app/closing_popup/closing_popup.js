@@ -7,12 +7,32 @@ import { _t } from "@web/core/l10n/translation";
 
 patch(ClosePosPopup.prototype, {
     async closeSession() {
-        const closing_process = await super.closeSession()
-        if (this.pos.user.pos_logout_direct) {
-            await this.pos.printZReport();
-            return window.location = '/web/session/logout'
+        if (window.Android != undefined) {
+            if (this.pos.hasAccess(this.pos.config['z_report_access_level'])) {
+                this.pos.doAuthFirst('z_report_access_level', 'z_report_pin_lock_enabled', 'z_report', async () => {
+                    const closing_process = await super.closeSession()
+                    if (this.pos.user.pos_logout_direct) {
+                        await this.pos.printZReportWithoutAuth();
+                        return window.location = '/web/session/logout'
+                    }
+                    await this.pos.printZReportWithoutAuth();
+                });
+            }
+            else {
+                this.env.services.notification.add(_t("Access Denied"), {
+                    type: 'danger',
+                    sticky: false,
+                    timeout: 10000,
+                });
+            }
         }
-        await this.pos.printZReport();
+        else {
+            this.env.services.notification.add(_t("Invalid Device"), {
+                type: 'danger',
+                sticky: false,
+                timeout: 10000,
+            });
+        }
     }
 })
 

@@ -1,6 +1,7 @@
 /** @odoo-module */
 /* global Sha1 */
 
+import { NumberPopup } from "@point_of_sale/app/utils/input_popups/number_popup";
 import { Navbar } from "@point_of_sale/app/navbar/navbar";
 import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
@@ -33,10 +34,10 @@ patch(Navbar.prototype, {
             }
         }
     },
-    async onClick() {
+    async onFiscalReadingClick() {
         await this.popup.add(FiscalReadingPopup, {
-            title: _t("Add Products"),
-            body: _t("Please add products before clicking Home delivery"),
+            title: _t("Fiscal Reading"),
+            body: _t("Fiscal Reading"),
         });
     },
     async onEJReadClick() {
@@ -45,107 +46,145 @@ patch(Navbar.prototype, {
             body: _t("EJ Read"),
         });
     },
-    onZmallClicked() {
-        this.pos.showTempScreen("DeliveryOrdersScreen");
+    onSyncFPClicked() {
+        console.log("onFeatchClicked clicked");
+        this.pos.syncPosOrderWithFP();
+    },
+    async onGPRSUploadClicked() {
+        await this.pos.doAuthFirst('gprs_upload_access_level', 'gprs_upload_pin_lock_enabled', 'gprs_upload', async () => {
+            if (window.Android != undefined) {
+                if (window.Android.isAndroidPOS()) {
+                    window.Android.triggerGprsUpload();
+                }
+                else {
+                    this.env.services.notification.add("Invalid device", {
+                        type: 'danger',
+                        sticky: false,
+                        timeout: 10000,
+                    });
+                }
+            }
+            else {
+                this.env.services.notification.add("Invalid device", {
+                    type: 'danger',
+                    sticky: false,
+                    timeout: 10000,
+                });
+            }
+        });
     },
     async onPrintAllPlusClick() {
-        var check = await this.pos.correctTimeConfig();
-        if (!await this.pos.correctTimeConfig()) {
-            return;
-        }
-
-        let productDetails = [];
-        for (let product of Object.values(this.pos.db.product_by_id)) {
-            productDetails.push({
-                'pluCode': product.default_code,
-                'productName': product.display_name,
-                'taxRate': product.taxes_id === undefined ? 0 : product.taxes_id.length > 0 ? this.pos.taxes_by_id[product.taxes_id[0]].amount : 0,
-                'unitPrice': product.lst_price
-            });
-        }
-        let jsonProductDetails = JSON.stringify(productDetails);
-
-        if (window.Android != undefined) {
-            if (window.Android.isAndroidPOS()) {
-                var result = window.Android.printAllPOSPlus(jsonProductDetails);
-
-                this.pos.makeLogEntry("Print ALL POS PLU's Requested => " + jsonProductDetails);
-
-                var responseObject = JSON.parse(result);
-                if (responseObject.success) {
-                    this.env.services.notification.add("Printing All PLUs Successfull", {
-                        type: 'info',
-                        sticky: false,
-                        timeout: 10000,
-                    });
-
-                    this.pos.makeLogEntry("Printing All PLUs Successfull");
-
-                }
-                else {
-                    this.env.services.notification.add("All PLUs Printing Failed", {
-                        type: 'danger',
-                        sticky: false,
-                        timeout: 10000,
-                    });
-                    this.pos.makeLogEntry("All PLUs Printing Failed");
-                }
+        await this.pos.doAuthFirst('all_plu_access_level', 'all_plu_pin_lock_enabled', 'all_plu', async () => {
+            var check = await this.pos.correctTimeConfig();
+            if (!await this.pos.correctTimeConfig()) {
+                return;
             }
-        }
-        return jsonProductDetails;
+
+            let productDetails = [];
+            for (let product of Object.values(this.pos.db.product_by_id)) {
+                productDetails.push({
+                    'pluCode': product.default_code,
+                    'productName': product.display_name,
+                    'taxRate': product.taxes_id === undefined ? 0 : product.taxes_id.length > 0 ? this.pos.taxes_by_id[product.taxes_id[0]].amount : 0,
+                    'unitPrice': product.lst_price
+                });
+            }
+            let jsonProductDetails = JSON.stringify(productDetails);
+
+            if (window.Android != undefined) {
+                if (window.Android.isAndroidPOS()) {
+                    var result = window.Android.printAllPOSPlus(jsonProductDetails);
+
+                    this.pos.makeLogEntry("Print ALL POS PLU's Requested => " + jsonProductDetails);
+
+                    var responseObject = JSON.parse(result);
+                    if (responseObject.success) {
+                        this.env.services.notification.add("Printing All PLUs Successfull", {
+                            type: 'info',
+                            sticky: false,
+                            timeout: 10000,
+                        });
+
+                        this.pos.makeLogEntry("Printing All PLUs Successfull");
+
+                    }
+                    else {
+                        this.env.services.notification.add("All PLUs Printing Failed", {
+                            type: 'danger',
+                            sticky: false,
+                            timeout: 10000,
+                        });
+                        this.pos.makeLogEntry("All PLUs Printing Failed");
+                    }
+                }
+            } else {
+                this.env.services.notification.add("Invalid device", {
+                    type: 'danger',
+                    sticky: false,
+                    timeout: 10000,
+                });
+            }
+            return jsonProductDetails;
+        });
+    },
+    async onCloseSessionClick() {
+        const info = await this.pos.getClosePosInfo();
+        this.popup.add(ClosePosPopup, { ...info, keepBehind: true });
     },
     async onPrintAllTaxRates() {
-        var check = await this.pos.correctTimeConfig();
-        if (!await this.pos.correctTimeConfig()) {
-            return;
-        }
-
-        let taxesList = [];
-        // console.log("sss");
-        // console.log(this.pos.taxes);
-        for (let tax of Object.values(this.pos.taxes)) {
-            if (tax.type_tax_use === 'sale') {
-                let taxInfo = {
-                    'name': tax.name,
-                    'amount': tax.amount,
-                };
-                taxesList.push(taxInfo);
+        await this.pos.doAuthFirst('all_tax_access_level', 'all_tax_pin_lock_enabled', 'all_tax', async () => {
+            var check = await this.pos.correctTimeConfig();
+            if (!await this.pos.correctTimeConfig()) {
+                return;
             }
-        }
 
-        let jsonTaxes = JSON.stringify(taxesList);
-        if (window.Android != undefined) {
-            if (window.Android.isAndroidPOS()) {
-                var log_data;
-                var result = window.Android.printPOSTaxRates(jsonTaxes);
-
-                log_data = "Printing all Tax Rates Request to onPrintAllTaxRates"
-                this.pos.makeLogEntry("Printing all Tax Rates Requested => " + jsonTaxes);
-
-                var responseObject = JSON.parse(result);
-                if (responseObject.success) {
-                    this.env.services.notification.add("Printing all Tax Rates Successfull", {
-                        type: 'info',
-                        sticky: false,
-                        timeout: 10000,
-                    });
-
-                    this.pos.makeLogEntry("Printing all Tax Rates Successfull");
+            let taxesList = [];
+            // console.log("sss");
+            // console.log(this.pos.taxes);
+            for (let tax of Object.values(this.pos.taxes)) {
+                if (tax.type_tax_use === 'sale') {
+                    let taxInfo = {
+                        'name': tax.name,
+                        'amount': tax.amount,
+                    };
+                    taxesList.push(taxInfo);
                 }
-                else {
-                    this.env.services.notification.add("All Tax Rates Printing Failed", {
-                        type: 'danger',
-                        sticky: false,
-                        timeout: 10000,
-                    });
-
-                    this.pos.makeLogEntry("Printing all Tax Rates Failed");
-                }
-
             }
-        }
 
-        return jsonTaxes;
+            let jsonTaxes = JSON.stringify(taxesList);
+            if (window.Android != undefined) {
+                if (window.Android.isAndroidPOS()) {
+                    var log_data;
+                    var result = window.Android.printPOSTaxRates(jsonTaxes);
+
+                    log_data = "Printing all Tax Rates Request to onPrintAllTaxRates"
+                    this.pos.makeLogEntry("Printing all Tax Rates Requested => " + jsonTaxes);
+
+                    var responseObject = JSON.parse(result);
+                    if (responseObject.success) {
+                        this.env.services.notification.add("Printing all Tax Rates Successfull", {
+                            type: 'info',
+                            sticky: false,
+                            timeout: 10000,
+                        });
+
+                        this.pos.makeLogEntry("Printing all Tax Rates Successfull");
+                    }
+                    else {
+                        this.env.services.notification.add("All Tax Rates Printing Failed", {
+                            type: 'danger',
+                            sticky: false,
+                            timeout: 10000,
+                        });
+
+                        this.pos.makeLogEntry("Printing all Tax Rates Failed");
+                    }
+
+                }
+            }
+
+            return jsonTaxes;
+        });
     },
     async onZReportClick() {
         this.pos.printZReport();

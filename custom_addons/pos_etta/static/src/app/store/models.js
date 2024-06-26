@@ -7,7 +7,6 @@ import { _t } from "@web/core/l10n/translation";
 import { VoidReasonPopup } from "../void_reason_popup/void_reason_popup";
 import { ErrorPopup } from "@point_of_sale/app/errors/popups/error_popup";
 import { ConfirmPopup } from "@point_of_sale/app/utils/confirm_popup/confirm_popup";
-// import { QRCode } from "../../../lib/qrcode";
 
 patch(Order.prototype, {
     setup(_defaultObj, options) {
@@ -18,6 +17,7 @@ patch(Order.prototype, {
             this.set_partner(partner);
         }
         this.is_refund = false;
+        this.checked = false;
         this.fs_no = "";
         this.rf_no = "";
         this.ej_checksum = "";
@@ -25,6 +25,7 @@ patch(Order.prototype, {
         this.payment_qr_code_str = "";
         if (options.json) {
             this.set_is_refund_order(options.json.is_refund);
+            this.set_checked(options.json.checked);
             this.set_fs_no(options.json.fs_no);
             this.set_rf_no(options.json.rf_no);
             this.set_ej_checksum(options.json.ej_checksum);
@@ -39,6 +40,7 @@ patch(Order.prototype, {
     init_from_JSON(json) {
         super.init_from_JSON(json);
         this.set_is_refund_order(json.is_refund);
+        this.set_checked(json.checked);
         this.set_fs_no(json.fs_no);
         this.set_rf_no(json.rf_no);
         this.set_ej_checksum(json.ej_checksum);
@@ -48,6 +50,7 @@ patch(Order.prototype, {
     export_as_JSON() {
         const jsonResult = super.export_as_JSON();
         jsonResult.is_refund = this.is_refund;
+        jsonResult.checked = this.checked;
         jsonResult.fs_no = this.fs_no;
         jsonResult.rf_no = this.rf_no;
         jsonResult.ej_checksum = this.ej_checksum;
@@ -115,7 +118,7 @@ patch(Order.prototype, {
         return false;
     },
     async removeOrderline(line) {
-        if (this.isFiscalPrinted()) {
+        if (this.pos.get_order().rf_no !== "" || this.pos.get_order().fs_no !== "") {
             this.env.services.notification.add("Not allowed to modify a order with a printed fiscal receipt", {
                 type: 'danger',
                 sticky: false,
@@ -124,55 +127,42 @@ patch(Order.prototype, {
             return;
         }
         if (this.pos.config.module_pos_restaurant) {
-            let changes = Object.values(this.pos.get_order().changesToOrder());
             let found = false;
             let orderedQty = 0;
 
-            if (changes.length != 0) {
-                for (let i = 0; i < changes.length; i++) {
-                    const change = changes[i];
-                    for (let j = 0; j < change.length; j++) {
-                        const element = change[j];
-                        if (element.product_id == this.pos.get_order().get_selected_orderline().get_product().id) {
-                            orderedQty = element.quantity;
-                            found = true;
-                            break;
-                        }
+            let kitchedDisplayData = Object.values(this.pos.get_order().lastOrderPrepaChange);
+            if (kitchedDisplayData.length != 0) {
+                kitchedDisplayData.forEach(ktoItem => {
+                    if (ktoItem.product_id == this.pos.get_order().get_selected_orderline().get_product().id) {
+                        orderedQty = ktoItem.quantity;
+                        found = true;
+                        console.log("Found in KTO");
                     }
-                }
+                });
             }
 
             if (found) {
-                if (this.pos.config.disable_remove_order_line_basic_right) {
-                    if (this.pos.get_cashier().role === 'manager') {
-                        const popupResult = await this.env.services.popup.add(VoidReasonPopup, {
-                            title: _t("Void Orderline"),
-                            orderedQty: orderedQty
-                        });
+                if (this.pos.hasAccess(this.pos.config['allow_quantity_change_and_remove_orderline'])) {
+                    const popupResult = await this.env.services.popup.add(VoidReasonPopup, {
+                        title: _t("Void Orderline"),
+                        orderedQty: orderedQty
+                    });
 
-                        let all_data = []
-                        var jsonString = JSON.stringify(this.get_data_to_store());
-                        var existingData = localStorage.getItem('VOIDED_ORDERS');
-                        if (existingData) {
-                            let parsedData = JSON.parse(existingData);
-                            all_data.push(...parsedData)
-                        }
-                        all_data.push(JSON.parse(jsonString))
-                        localStorage.setItem('VOIDED_ORDERS', JSON.stringify(all_data));
-
-                        if (popupResult.confirmed) {
-                            super.removeOrderline(line);
-                        }
-                        else if (popupResult.error) {
-                            this.env.services.notification.add(popupResult.error, {
-                                type: 'danger',
-                                sticky: false,
-                                timeout: 10000,
-                            });
-                        }
+                    let all_data = []
+                    var jsonString = JSON.stringify(this.get_data_to_store());
+                    var existingData = localStorage.getItem('VOIDED_ORDERS');
+                    if (existingData) {
+                        let parsedData = JSON.parse(existingData);
+                        all_data.push(...parsedData)
                     }
-                    else {
-                        this.env.services.notification.add("Access Denied", {
+                    all_data.push(JSON.parse(jsonString))
+                    localStorage.setItem('VOIDED_ORDERS', JSON.stringify(all_data));
+
+                    if (popupResult.confirmed) {
+                        super.removeOrderline(line);
+                    }
+                    else if (popupResult.error) {
+                        this.env.services.notification.add(popupResult.error, {
                             type: 'danger',
                             sticky: false,
                             timeout: 10000,
@@ -180,58 +170,17 @@ patch(Order.prototype, {
                     }
                 }
                 else {
-                    const popupResult = await this.env.services.popup.add(VoidReasonPopup, {
-                        title: _t("Void Orderline"),
-                        orderedQty: orderedQty
+                    this.pos.env.services.popup.add(ErrorPopup, {
+                        title: _t('Access Denied'),
+                        body: _t('You do not have access to void orderline'),
                     });
-                    let all_data = []
-                    var jsonString = JSON.stringify(this.get_data_to_store());
-                    var existingData = localStorage.getItem('VOIDED_ORDERS');
-                    if (existingData) {
-                        let parsedData = JSON.parse(existingData);
-                        all_data.push(...parsedData)
-                    }
-                    all_data.push(JSON.parse(jsonString))
-                    localStorage.setItem('VOIDED_ORDERS', JSON.stringify(all_data));
-                    if (popupResult.confirmed) {
-                        super.removeOrderline(line);
-                    }
                 }
             } else {
                 super.removeOrderline(line);
             }
         }
         else {
-            if (this.pos.config.disable_remove_order_line_basic_right) {
-                if (this.pos.get_cashier().role === 'manager') {
-                    const popupResult = await this.env.services.popup.add(VoidReasonPopup, {
-                        title: _t("Void Orderline"),
-                        orderedQty: 1
-                    });
-
-                    let all_data = []
-                    var jsonString = JSON.stringify(this.get_data_to_store());
-                    var existingData = localStorage.getItem('VOIDED_ORDERS');
-                    if (existingData) {
-                        let parsedData = JSON.parse(existingData);
-                        all_data.push(...parsedData)
-                    }
-                    all_data.push(JSON.parse(jsonString))
-                    localStorage.setItem('VOIDED_ORDERS', JSON.stringify(all_data));
-
-                    if (popupResult.confirmed) {
-                        super.removeOrderline(line);
-                    }
-                }
-                else {
-                    this.env.services.notification.add("Access Denied", {
-                        type: 'danger',
-                        sticky: false,
-                        timeout: 10000,
-                    });
-                }
-            }
-            else {
+            if (this.pos.hasAccess(this.pos.config['allow_quantity_change_and_remove_orderline'])) {
                 const popupResult = await this.env.services.popup.add(VoidReasonPopup, {
                     title: _t("Void Orderline"),
                     orderedQty: 1
@@ -251,6 +200,13 @@ patch(Order.prototype, {
                     super.removeOrderline(line);
                 }
             }
+            else {
+                this.pos.env.services.popup.add(ErrorPopup, {
+                    title: _t('Access Denied'),
+                    body: _t('You do not have access to change price!'),
+                });
+            }
+
         }
     },
     async printChanges(cancelled) {
@@ -443,6 +399,12 @@ patch(Order.prototype, {
             orderline.set_service_charge(orderline.product.service_charge);
         }
     },
+    is_checked() {
+        return this.checked;
+    },
+    set_checked(value) {
+        this.checked = value;
+    },
     is_refund_order() {
         return this.is_refund;
     },
@@ -529,6 +491,22 @@ patch(Order.prototype, {
             voided_filtered_data = parsedData.filter(item => item.name === this.name);
         }
 
+        // Get customer discount
+        let customerDiscount = 0;
+        if (this.get_partner() != undefined) {
+            customerDiscount = this.get_partner().discount_customer;
+        }
+        let globalDiscountAmount = 0;
+        if (this.pos.config.module_pos_discount) {
+            globalDiscountAmount = this.pos.config.discount_pc;
+        }
+
+        if (globalDiscountAmount > customerDiscount) {
+            globalDiscountAmount = globalDiscountAmount;
+        } else {
+            globalDiscountAmount = customerDiscount;
+        }
+
         var forSunmi = {
             orderlines: extractedOrderlines,
             voidedOrderLines: voided_filtered_data,
@@ -544,8 +522,8 @@ patch(Order.prototype, {
             globalServiceChargeType: "Percentage",
             globalServiceChargeAmount: this.pos.config.pos_module_pos_service_charge ? this.pos.config.global_service_charge : 0,
             globalDiscountType: "Percentage",
-            globalDiscountAmount: this.pos.config.module_pos_discount ? this.pos.config.discount_pc : 0,
-            commercialLogo: this.pos.config.self_ordering_image_brand
+            globalDiscountAmount: globalDiscountAmount,
+            commercialLogo: this.pos.config.receipt_image
         };
 
         if (window.Android != undefined) {
@@ -553,7 +531,7 @@ patch(Order.prototype, {
 
                 var result;
                 if (isRefundOrder) {
-                    result = window.Android.printRefundInvoice(JSON.stringify(forSunmi));
+                    result = windows.Android.printRefundInvoice(JSON.stringify(forSunmi));
                     this.pos.makeLogEntry("Printing Refund Invoice Request => " + JSON.stringify(forSunmi));
                 }
                 else {
@@ -567,9 +545,21 @@ patch(Order.prototype, {
                     this.set_fiscal_mrc(responseObject.mrc);
 
                     if (this.is_refund) {
+                        this.date_order = luxon.DateTime.fromFormat(responseObject.date + " " + responseObject.time, 'dd/MM/yyyy HH:mm', { zone: 'Africa/Addis_Ababa' });
+                        this.env.services.notification.add(responseObject.date + " " + responseObject.time, {
+                            type: 'danger',
+                            sticky: false,
+                            timeout: 10000,
+                        });
                         this.set_rf_no(responseObject.rfdNo);
                     }
                     else {
+                        this.date_order = luxon.DateTime.fromFormat(responseObject.date + " " + responseObject.time, 'dd/MM/yyyy HH:mm', { zone: 'Africa/Addis_Ababa' });
+                        this.env.services.notification.add(responseObject.date + " " + responseObject.time, {
+                            type: 'danger',
+                            sticky: false,
+                            timeout: 10000,
+                        });
                         this.set_fs_no(responseObject.fsNo);
                     }
                     this._printed = true;
@@ -586,20 +576,24 @@ patch(Order.prototype, {
                     return true;
                 } else {
                     if (responseObject.printedInvoice) {
-                        const { confirmed } = await this.env.services.popup.add(ConfirmPopup, {
-                            title: _t("Printed Invoice"),
-                            body: _t("%s has been printed before. Do you want a non-fiscal reprint?", forSunmi.ref),
-                        });
-                        if (confirmed) {
-                            if (this.is_refund) {
-                                result = window.Android.rePrintRefundInvoice(forSunmi.ref);
-                                this.pos.makeLogEntry("RePrint Refund Invoice Request => " + forSunmi.ref);
+                        if (this.pos.hasAccess(this.pos.config['ej_copy_access_level'])) {
+                            const { confirmed } = await this.env.services.popup.add(ConfirmPopup, {
+                                title: _t("Printed Invoice"),
+                                body: _t("%s has been printed before. Do you want a non-fiscal reprint?", forSunmi.ref),
+                            });
+                            if (confirmed) {
+                                await this.pos.doAuthFirst('ej_copy_access_level', 'ej_copy_pin_lock_enabled', 'ej_copy', async () => {
+                                    if (this.is_refund) {
+                                        result = window.Android.rePrintRefundInvoice(forSunmi.ref);
+                                        this.pos.makeLogEntry("RePrint Refund Invoice Request => " + forSunmi.ref);
+                                    }
+                                    else {
+                                        result = window.Android.rePrintSalesInvoice(forSunmi.ref);
+                                        this.pos.makeLogEntry("RePrint Sales Invoice Request => " + forSunmi.ref);
+                                    }
+                                    return true;
+                                });
                             }
-                            else {
-                                result = window.Android.rePrintSalesInvoice(forSunmi.ref);
-                                this.pos.makeLogEntry("RePrint Sales Invoice Request => " + forSunmi.ref);
-                            }
-                            return true;
                         }
                         return true;
                     }
@@ -629,20 +623,6 @@ patch(Order.prototype, {
             return false;
         }
     },
-    // async add_product(product, options) {
-    //     if (this.pos.get_order().isFiscalPrinted()) {
-    //         this.env.services.notification.add("Not allowed to modify a order with a printed fiscal receipt", {
-    //             type: 'danger',
-    //             sticky: false,
-    //             timeout: 10000,
-    //         });
-    //         return;
-    //     }
-    //     else {
-    //         const result = super.add_product(...arguments);
-    //         return result;
-    //     }
-    // }
 });
 
 patch(Orderline.prototype, {
@@ -670,16 +650,6 @@ patch(Orderline.prototype, {
         return orderlineClone;
     },
     set_service_charge(service_charge) {
-        // if(this.pos.get_order()!=undefined){
-        //     if (this.pos.get_order().isFiscalPrinted()) {
-        //         this.env.services.notification.add("Not allowed to modify a order with a printed fiscal receipt", {
-        //             type: 'danger',
-        //             sticky: false,
-        //             timeout: 10000,
-        //         });
-        //         return;
-        //     }
-        // }
         var parsed_service_charge =
             typeof service_charge === "number"
                 ? service_charge
@@ -691,7 +661,6 @@ patch(Orderline.prototype, {
         this.service_chargeStr = "" + sc;
     },
     get_all_prices(qty = this.get_quantity()) {
-        // console.log("=== this.order.state ===> ", (this.order.state != 'done' || this.order.state != 'paid'));
         var self = this;
         if (!this.order.is_refund && (this.order.state != 'done' || this.order.state != 'paid')) {
             if (this.order.pos.config.pos_module_pos_service_charge) {
@@ -704,13 +673,27 @@ patch(Orderline.prototype, {
                     line.set_discount(self.order.pos.config.discount_pc);
                 });
             }
+            if (this.order.get_partner() != undefined && this.order.pos.config.module_pos_discount) {
+                if (self.order.pos.config.discount_pc > self.order.get_partner().discount_customer) {
+                    this.order.orderlines.forEach(function (line) {
+                        line.set_discount(self.order.pos.config.discount_pc);
+                    });
+                }
+                else {
+                    this.order.orderlines.forEach(function (line) {
+                        line.set_discount(self.order.get_partner().discount_customer);
+                    });
+                }
+            }
+            else if (this.order.get_partner() != undefined) {
+                this.order.orderlines.forEach(function (line) {
+                    line.set_discount(self.order.get_partner().discount_customer);
+                });
+            }
         }
 
-        // First, calculate the price unit after discount but before service charge
         var price_unit = this.get_unit_price() * (1.0 - this.get_discount() / 100.0);
 
-        // Apply the service charge to the price unit
-        // Assuming service_charge is a percentage of the price unit after discount
         price_unit += price_unit * (this.service_charge / 100.0);
 
         var taxtotal = 0;
@@ -720,7 +703,6 @@ patch(Orderline.prototype, {
         var taxdetail = {};
         var product_taxes = this.pos.get_taxes_after_fp(taxes_ids, this.order.fiscal_position);
 
-        // Compute all taxes based on the adjusted price_unit which includes the service charge
         var all_taxes = this.compute_all(
             product_taxes,
             price_unit,
@@ -728,8 +710,6 @@ patch(Orderline.prototype, {
             this.pos.currency.rounding
         );
 
-        // For consistency, we might need to adjust how we present prices before discounts and service charges.
-        // This example does not handle that scenario directly but focuses on applying the service charge correctly.
         var all_taxes_before_discount = this.compute_all(
             product_taxes,
             this.get_unit_price(),

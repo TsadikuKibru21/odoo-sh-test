@@ -6,4 +6,5 @@ from . import pos_orderline
 from . import product_template
 from . import hr_employee
 from . import res_users
+from . import res_partner
 from . import LoggingModel

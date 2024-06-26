@@ -6,6 +6,7 @@ import { NumberPopup } from "@point_of_sale/app/utils/input_popups/number_popup"
 import { SelectionPopup } from "@point_of_sale/app/utils/input_popups/selection_popup";
 import { ErrorPopup } from "@point_of_sale/app/errors/popups/error_popup";
 import { _t } from "@web/core/l10n/translation";
+import { ConfirmPopup } from "@point_of_sale/app/utils/confirm_popup/confirm_popup";
 
 patch(TicketScreen.prototype, {
     _getToRefundDetail(orderline) {
@@ -29,18 +30,65 @@ patch(TicketScreen.prototype, {
 
         return res;
     },
-    // async onDeleteOrder(order) {
-    //     if(this.pos.get_order().isFiscalPrinted()){
-    //         this.env.services.notification.add("Can not delete order which has printed fiscal receipt", {
-    //             type: 'info',
-    //             sticky: false,
-    //             timeout: 10000,
-    //         });
-    //     }
-    //     else {
-    //         super.onDeleteOrder(...arguments);
-    //     }
-    // },
+    async onDeleteOrder(order) {
+        console.dir(order);
+        if (order.rf_no !== "" || order.fs_no !== "") {
+            this.env.services.notification.add("Can not delete order which has printed fiscal receipt", {
+                type: 'info',
+                sticky: false,
+                timeout: 10000,
+            });
+        }
+        else {
+            if (this.pos.hasAccess(this.pos.config['allow_quantity_change_and_remove_orderline'])) {
+                await this.pos.doAuthFirst('allow_quantity_change_and_remove_orderline', 'allow_quantity_change_and_remove_orderline_pin_lock_enabled', 'quantity_change_and_remove', async () => {
+                    await super.onDeleteOrder(...arguments);
+                });
+            }
+            else {
+                this.env.services.notification.add("You do not have access to delete an order!", {
+                    type: 'info',
+                    sticky: false,
+                    timeout: 10000,
+                });
+            }
+        }
+    },
+    async toggleStatus(order) {
+        if (!order.checked) {
+            const { confirmed } = await this.popup.add(ConfirmPopup, {
+                title: _t("Confirm Cash Collection"),
+                body: _t("Are you sure you have collected %s for %s", this.getTotal(order), order.name),
+            });
+            if (confirmed) {
+                try {
+                    let result = await this.orm.call("pos.order", "set_order_checked", [order.name]);
+                    if (result) {
+                        order.checked = true;
+                        this.env.services.notification.add("Order Status Changed", {
+                            type: 'info',
+                            sticky: false,
+                            timeout: 10000,
+                        });
+                    }
+                    else {
+                        this.env.services.notification.add("Order Status Change Failed. Please Try Again", {
+                            type: 'danger',
+                            sticky: false,
+                            timeout: 10000,
+                        });
+                    }
+                }
+                catch (error) {
+                    this.env.services.notification.add(error, {
+                        type: 'danger',
+                        sticky: false,
+                        timeout: 10000,
+                    });
+                }
+            }
+        }
+    },
     _prepareRefundOrderlineOptions(toRefundDetail) {
         const { qty, orderline } = toRefundDetail;
         const draftPackLotLines = orderline.pack_lot_lines
