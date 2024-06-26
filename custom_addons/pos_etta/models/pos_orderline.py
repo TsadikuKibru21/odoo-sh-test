@@ -213,12 +213,6 @@ class PosOrderInherit(models.Model):
             'fiscal_mrc': ui_order.get('fiscal_mrc', ''),
             'payment_qr_code_str': ui_order.get('payment_qr_code_str', ''),
         })
-
-        # if 'date_order' in vals:
-        #     date_order = fields.Datetime.from_string(vals['date_order'])
-        #     date_order += timedelta(hours=3)
-        #     vals['date_order'] = fields.Datetime.to_string(date_order)
-
         return vals
     
     @api.onchange('service_charge', 'price_unit', 'tax_ids', 'qty', 'discount', 'product_id')
