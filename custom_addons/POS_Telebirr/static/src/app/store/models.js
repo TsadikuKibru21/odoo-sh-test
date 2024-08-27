@@ -1,7 +1,7 @@
 /** @odoo-module */
 import { register_payment_method } from "@point_of_sale/app/store/pos_store";
 import { Payment } from "@point_of_sale/app/store/models";
-import { PaymentTelebirr } from "@POS_Telebirr/app/payment_redelcom";
+import { PaymentTelebirr } from "@pos_telebirr/app/payment_redelcom";
 import { patch } from "@web/core/utils/patch";
 
 register_payment_method("telebirr", PaymentTelebirr);

@@ -3,5 +3,4 @@
 # Licensed under the GPL-3.0 License or later.
 
 from . import models
-from . import wizard
 from . import controllers

@@ -23,7 +23,6 @@ class PosConfig(models.Model):
             'code': "pos.order",
             'company_id': values.get('company_id', False),
         }
-        # force sequence_id field to new pos.order sequence
         values['sequence_id'] = IrSequence.create(val).id
 
         val.update(name=_('POS order line %s', values['name']), code='pos.order.line')
@@ -33,5 +32,4 @@ class PosConfig(models.Model):
         pos_config.sudo()._check_modules_to_install()
         pos_config.sudo()._check_groups_implied()
 
-        # If you plan to add something after this, use a new environment. The one above is no longer valid after the modules install.
         return pos_config

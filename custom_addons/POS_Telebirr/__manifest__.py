@@ -3,10 +3,10 @@
 # Licensed under the GPL-3.0 License or later.
 
 {
-    "name": "POS Telebirr",
+    "name": "POS Telebirr Payment",
 
     "summary": """
-        Integrate your POS with a Redelcom payment terminal
+        Telebirr USSD payment with POS
     """,
 
     "author": "Konos Soluciones & Servicios",
@@ -25,16 +25,18 @@
 
     "data": [
         "security/ir.model.access.csv",
-        "wizard/payment_status.xml",
+        # "wizard/payment_status.xml",
         "views/pos_payment_method_views.xml",
+        'views/telebirr_report.xml',
+
 
     ],
     "assets": {
         "point_of_sale._assets_pos": [
-            "/POS_Telebirr/static/**/*",
-            "/POS_Telebirr/static/src/**/*",
-            'POS_Telebirr/static/src/app/*',
-            "POS_Telebirr/static/src/overrides/components/payment_screen/payment_screen_payment_lines/test"
+            "/pos_telebirr/static/**/*",
+            "/pos_telebirr/static/src/**/*",
+            'pos_telebirr/static/src/app/*',
+            "pos_telebirr/static/src/overrides/components/payment_screen/payment_screen_payment_lines/test"
 
             # "/pos_redelcom1/views/pos_payment_method_views.xml"
         ],
