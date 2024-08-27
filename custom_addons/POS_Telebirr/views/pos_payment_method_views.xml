@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="pos_payment_method_view_form_inherit_pos_telebirr" model="ir.ui.view">
+    <record id="pos_payment_method_view_form_inherit_POS_Telebirr" model="ir.ui.view">
         <field name="name">pos.payment.method.form.inherit.telebirr</field>
         <field name="model">pos.payment.method</field>
         <field name="inherit_id" ref="point_of_sale.pos_payment_method_view_form"/>
