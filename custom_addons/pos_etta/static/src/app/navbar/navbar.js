@@ -8,10 +8,14 @@ import { _t } from "@web/core/l10n/translation";
 import { FiscalReadingPopup } from "./FiscalReadingPopup/FiscalReadingPopup";
 import { EJReadingPopup } from "./EJReadingPopup/EJReadingPopup";
 import { SelectionPopup } from "@point_of_sale/app/utils/input_popups/selection_popup";
+import { usePos } from "@point_of_sale/app/store/pos_hook";
+import { useService } from "@web/core/utils/hooks";
 
 patch(Navbar.prototype, {
     setup() {
-        super.setup();
+        super.setup(...arguments);
+        this.pos = usePos();
+        this.orm = useService("orm");
     },
     get isRefund() {
         return this.pos.is_refund_order();
@@ -50,6 +54,25 @@ patch(Navbar.prototype, {
         console.log("onFeatchClicked clicked");
         this.pos.syncPosOrderWithFP();
     },
+    async onLowStockClick() {
+        var self = this;
+        let low_stock = self.pos.config.low_stock
+        await this.orm.call(
+            "product.product",
+            "get_low_stock_products",
+            [0, low_stock],
+        ).then(function (data) {
+            self.pos.low_stock_products = [];
+            for (var k = 0; k < data.length; k++) {
+                let product = self.pos.db.get_product_by_id(data[k]);
+                if (product) {
+                    self.pos.low_stock_products.push(product);
+                }
+            }
+            self.pos.showTempScreen('LowStockProducts');
+        }
+        );
+    },
     async onGPRSUploadClicked() {
         await this.pos.doAuthFirst('gprs_upload_access_level', 'gprs_upload_pin_lock_enabled', 'gprs_upload', async () => {
             if (window.Android != undefined) {
@@ -83,7 +106,7 @@ patch(Navbar.prototype, {
             let productDetails = [];
             for (let product of Object.values(this.pos.db.product_by_id)) {
                 productDetails.push({
-                    'pluCode': product.default_code,
+                    'pluCode': !product.default_code ? "N/A" : product.default_code,
                     'productName': product.display_name,
                     'taxRate': product.taxes_id === undefined ? 0 : product.taxes_id.length > 0 ? this.pos.taxes_by_id[product.taxes_id[0]].amount : 0,
                     'unitPrice': product.lst_price
@@ -94,6 +117,7 @@ patch(Navbar.prototype, {
             if (window.Android != undefined) {
                 if (window.Android.isAndroidPOS()) {
                     var result = window.Android.printAllPOSPlus(jsonProductDetails);
+                    console.log("printAllPOSPlus => " + jsonProductDetails);
 
                     this.pos.makeLogEntry("Print ALL POS PLU's Requested => " + jsonProductDetails);
 
@@ -106,10 +130,9 @@ patch(Navbar.prototype, {
                         });
 
                         this.pos.makeLogEntry("Printing All PLUs Successfull");
-
                     }
                     else {
-                        this.env.services.notification.add("All PLUs Printing Failed", {
+                        this.env.services.notification.add("ERROR : " + responseObject.message, {
                             type: 'danger',
                             sticky: false,
                             timeout: 10000,
@@ -139,8 +162,6 @@ patch(Navbar.prototype, {
             }
 
             let taxesList = [];
-            // console.log("sss");
-            // console.log(this.pos.taxes);
             for (let tax of Object.values(this.pos.taxes)) {
                 if (tax.type_tax_use === 'sale') {
                     let taxInfo = {

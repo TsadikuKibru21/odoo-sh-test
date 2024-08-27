@@ -2,81 +2,99 @@
 
 import { BasePrinter } from "@point_of_sale/app/printer/base_printer";
 import { patch } from "@web/core/utils/patch";
+import { jsonrpc } from "@web/core/network/rpc_service";
 
 patch(BasePrinter.prototype, {
     setup(params) {
         super.setup(...arguments);
-        const { rpc, url } = params;
-        this.rpc = rpc;
-        this.url = url;
     },
     async printReceipt(receipt, printer) {
         if (receipt) {
             this.receiptQueue.push(receipt);
         }
-        let escposReceipt, printResult;
+
+        let isPrintSuccessful = true;
+
         while (this.receiptQueue.length > 0) {
             receipt = this.receiptQueue.shift();
-            let escposReceipt = this.generateKitchenOrderReceipt(receipt, printer);
+
             try {
-                let merged = {
-                    printer: printer,
-                    receipt: escposReceipt
-                };
 
-                // console.log("TO BE SENT TO THERMAL PRINTER");
-                // console.log(merged);
+                if (receipt.printing_type == 'server') {
+                    await jsonrpc('/orderpinter/printorder', {
+                        receipt: receipt,
+                        orderp: printer
+                    }).then(
+                        function (data) {
+                            isPrintSuccessful = data;
+                        }
+                    );
+                }
 
-                if (window.Android.isAndroidPOS()) {
+                if (receipt.printing_type == 'android') {
+                    let escposReceipt = this.generateKitchenOrderReceipt(receipt, printer);
+                    let merged = {
+                        printer: printer,
+                        receipt: escposReceipt
+                    };
 
-                    window.handleOrderPrintResponse = function(response) {
-                        // console.log(JSON.parse(response));
+                    if (window.Android.isAndroidPOS()) {
+                        // Call the Android interface method and parse the result
+                        var result = window.Android.printTcp(JSON.stringify(merged));
+
+                        // Parse the result as a JSON object
+                        var responseObject = JSON.parse(result);
+
+                        // console.log(responseObject);
+
+                        // Check the success flag in the responseObject
+                        if (!responseObject.success) {
+                            isPrintSuccessful = false;  // Update the success flag if the print failed
+                        }
+                    } else {
+                        this.env.services.notification.add("Invalid Device", {
+                            type: 'danger',
+                            sticky: false,
+                            timeout: 10000,
+                        });
+
+                        isPrintSuccessful = false;
                     }
-                    
-                    var result = window.Android.printTcp(JSON.stringify(merged));
+                }
 
-                    var responseObject = JSON.parse(result);
-                    
-                    // console.log(responseObject);
-                }
-                else {
-                    this.env.services.notification.add("Invalid Device", {
-                        type: 'danger',
-                        sticky: false,
-                        timeout: 10000,
-                    });
-                }
-            } catch {
-                // Error in communicating to the IoT box.
+            } catch (error) {
+                // Error in communicating to the IoT box or Android interface
+                console.error(error); // Log the error for debugging
                 this.receiptQueue.length = 0;
-                return this.getActionError();
+                return { successful: false };  // Return an error response
             }
-            // rpc call is okay but printing failed because
-            // IoT box can't find a printer.
-            if (!printResult || printResult.result === false) {
+
+            // If printing failed, exit and return the failure response
+            if (!isPrintSuccessful) {
                 this.receiptQueue.length = 0;
-                return this.getResultsError(printResult);
+                return { successful: false };
             }
         }
-        return { successful: true };
+
+        return { successful: true };  // Return success if all receipts were printed successfully
     },
-    sendPrintingOrder(receipt, printer) {
-        return this.rpc(`${this.url}/orderpinter/printorder`, { receipt, printer });
-    },
+    // sendPrintingOrder(receipt, printer) {
+    //     return this.rpc(`${this.url}/orderpinter/printorder`, { receipt, printer });
+    // },
     generateKitchenOrderReceipt(orderData, printer) {
         let receiptText = "\x1B\x40";
         receiptText += "\x1B\x21\x1C"; // Set font size to double width and double height
         receiptText += "[C]" + printer.name + "\n";
         receiptText += "\x1B\x21\x00"; // Reset font size
         receiptText += "------------------------------------------------\n";
-    
+
         receiptText += "[L]<b>Table:</b> " + orderData.table_name + "\n";
         receiptText += "[L]<b>Floor:</b> " + orderData.floor_name + "\n";
         receiptText += "[L]<b>Order Number:</b> " + orderData.name + "\n";
         receiptText += "[L]<b>Cashier:</b> " + orderData.cashier + "\n";
         receiptText += "[L]<b>Date:</b> " + orderData.date + "\n";
         receiptText += "[L]<b>Time:</b> " + orderData.time.hours + ":" + orderData.time.minutes + "\n";
-    
+
         if (orderData.new != undefined && orderData.new && orderData.new.length > 0) {
             receiptText += "------------------------------------------------\n";
             receiptText += "[L]<b>NEW ITEMS:</b>\n";
@@ -84,7 +102,7 @@ patch(BasePrinter.prototype, {
                 receiptText += "[L]" + item.name + " x " + item.quantity + "\n";
             });
         }
-    
+
         if (orderData.cancelled != undefined && orderData.cancelled && orderData.cancelled.length > 0) {
             receiptText += "------------------------------------------------\n";
             receiptText += "[L]<b>CANCELLED ITEMS:</b>\n";
@@ -92,11 +110,11 @@ patch(BasePrinter.prototype, {
                 receiptText += "[L]" + item.name + " x " + item.quantity + "\n";
             });
         }
-    
+
         receiptText += "\n\n\n";
         receiptText += "[L]\n";
-        receiptText +="[L]\n";
-    
+        receiptText += "[L]\n";
+
         return receiptText;
     }
 });

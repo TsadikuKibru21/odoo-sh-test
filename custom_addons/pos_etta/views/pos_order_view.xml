@@ -7,16 +7,16 @@
         <field name="inherit_id" ref="point_of_sale.view_pos_pos_form" />
         <field name="arch" type="xml">
             <!-- Add service_charge to the Tree View under the Products page -->
-            <xpath expr="//page[@name='products']/field[@name='lines']/tree/field[@name='discount']"
+            <!-- <xpath expr="//page[@name='products']/field[@name='lines']/tree/field[@name='discount']"
                 position="after">
                 <field name="service_charge" />
-            </xpath>
+            </xpath> -->
             <!-- Add service_charge to the Form View under the Products page -->
-            <xpath
+            <!-- <xpath
                 expr="//page[@name='products']/field[@name='lines']/form//field[@name='discount']"
                 position="after">
                 <field name="service_charge" />
-            </xpath>
+            </xpath> -->
 
             <xpath expr="//field[@name='tracking_number']" position="after">
                 <field name="ej_checksum" readonly="1" />
@@ -30,14 +30,14 @@
                 <field name="fiscal_mrc" readonly="1" />
             </xpath>
 
-            <xpath expr="//field[@name='amount_tax']" position="before">
+            <!-- <xpath expr="//field[@name='amount_tax']" position="before">
                 <field name="service_charge_amount" force_save="1" widget="monetary" />
-            </xpath>
+            </xpath> -->
 
         </field>
     </record>
 
-    <record id="view_pos_order_tree_inherit" model="ir.ui.view">
+    <!-- <record id="view_pos_order_tree_inherit" model="ir.ui.view">
         <field name="name">pos.order.tree.inherit</field>
         <field name="model">pos.order</field>
         <field name="inherit_id" ref="point_of_sale.view_pos_order_tree" />
@@ -46,5 +46,5 @@
                 <field name="service_charge_amount" sum="Total Service Charge"/>
             </xpath>
         </field>
-    </record>
+    </record> -->
 </odoo>

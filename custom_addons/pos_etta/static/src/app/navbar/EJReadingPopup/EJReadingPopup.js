@@ -31,7 +31,7 @@ export class EJReadingPopup extends AbstractAwaitablePopup {
         const day = date.getDate().toString().padStart(2, '0');
         const month = (date.getMonth() + 1).toString().padStart(2, '0'); // Month is 0-indexed
         const year = date.getFullYear();
-        return `${year}-${month}-${day}`; // Format as YYYY-MM-DD for input[type="date"]
+        return `${day}/${month}/${year}`; // Format as YYYY-MM-DD for input[type="date"]
     }
 
     // Method to handle changes in the "By Date Range" checkbox
@@ -121,8 +121,8 @@ export class EJReadingPopup extends AbstractAwaitablePopup {
         if (window.Android !== undefined && window.Android.isAndroidPOS()) {
             try {
                 const posResult = await window.Android.printEJReport(JSON.stringify(result));
-                // console.log("posResult => ");
-                // console.log(posResult);
+                console.log("posResult => ");
+                console.log(posResult);
 
                 this.pos.makeLogEntry("EJ Report Printing Request => " + JSON.stringify(result));
 
@@ -138,7 +138,7 @@ export class EJReadingPopup extends AbstractAwaitablePopup {
                         this.pos.makeLogEntry(element.message);
 
                     } else {
-                        this.env.services.notification.add("EJ Report Printing Failed", {
+                        this.env.services.notification.add("ERROR : " + element.message, {
                             type: 'danger',
                             sticky: false,
                             timeout: 10000,

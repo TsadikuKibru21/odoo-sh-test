@@ -1,5 +1,5 @@
 from odoo import fields, models, api, _
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 
 import logging
 
@@ -19,7 +19,7 @@ class PosConfig(models.Model):
         default=fields.Datetime.now,
         required=True
         )
-    global_service_charge = fields.Float("Global Service charge")
+    global_service_charge = fields.Many2one('account.tax', string='Global Service Charge', domain=[('type_tax_use', '=', 'sale'), ('include_base_amount', '=', True)], help='Reference to the global service charge tax')
     pos_module_pos_service_charge = fields.Boolean("Global Service charge")
     serial_number = fields.Char("Fiscal Printer Serial Number")
     fiscal_mrc = fields.Char("Fiscal Printer MRC")
@@ -135,7 +135,31 @@ class PosConfig(models.Model):
     gprs_upload_pin_lock_enabled = fields.Boolean(string='Enable PIN Locking', default=False)
     gprs_upload_pin_code = fields.Char(string='PIN Code')
 
-    @api.constrains('sync_fp_pin_code', 'close_session_pin_code', 'all_tax_pin_code', 'all_plu_pin_code', 'ej_copy_pin_code', 'ej_read_pin_code', 'fr_pin_code', 'x_report_pin_code', 'z_report_pin_code', 'gprs_upload_pin_code')
+    payment_access_level = fields.Selection([
+        ('none', 'None'),
+        ('basic', 'Basic Users'),
+        ('advanced', 'Advanced Users'),
+        ('both', 'Both')
+    ], string='Access Level', default='none')
+    payment_pin_lock_enabled = fields.Boolean(string='Enable PIN Locking', default=False)
+    payment_pin_code = fields.Char(string='PIN Code')
+
+    discount_access_level = fields.Selection([
+        ('none', 'None'),
+        ('basic', 'Basic Users'),
+        ('advanced', 'Advanced Users'),
+        ('both', 'Both')
+    ], string='Access Level', default='none')
+
+    create_mrp_order = fields.Boolean("Create MRP Order", help="Allow to create MRP Order in POS", default=True)
+    is_done = fields.Boolean("Done MRP Order", help="Allow to Done MRP Order in POS", default=True)    
+    show_waiter_table_on_fiscal_receipt = fields.Boolean(string='Show Waiter and Table on Fiscal Receipt', default=False, domain="[('module_pos_restaurant', '=', True)]")
+    order_printing_type = fields.Selection([
+        ('android', 'via Android'),
+        ('server', 'via Server')
+    ], string='Order Printing Type', default='android')
+
+    @api.constrains('payment_pin_code', 'discount_pin_code', 'sync_fp_pin_code', 'close_session_pin_code', 'all_tax_pin_code', 'all_plu_pin_code', 'ej_copy_pin_code', 'ej_read_pin_code', 'fr_pin_code', 'x_report_pin_code', 'z_report_pin_code', 'gprs_upload_pin_code')
     def _check_pin_code(self):
         pin_fields = [
             ('sync_fp_pin_lock_enabled', 'sync_fp_pin_code', 'Sync FP PIN'),
@@ -147,6 +171,7 @@ class PosConfig(models.Model):
             ('x_report_pin_lock_enabled', 'x_report_pin_code', 'X Report PIN'),
             ('z_report_pin_lock_enabled', 'z_report_pin_code', 'Z Report PIN'),
             ('gprs_upload_pin_lock_enabled', 'gprs_upload_pin_code', 'GPRS Upload PIN'),
+            ('payment_pin_lock_enabled', 'payment_pin_code', 'Payment PIN'),
         ]
 
         for lock_enabled_field, pin_code_field, pin_name in pin_fields:
@@ -154,3 +179,26 @@ class PosConfig(models.Model):
             pin_code = getattr(self, pin_code_field)
             if lock_enabled and (not pin_code or not pin_code.isdigit() or len(pin_code) != 4):
                 raise ValidationError(_("Please set a valid 4-digit {0} if {0} locking is enabled.").format(pin_name))
+            
+    @api.model
+    def create(self, vals):
+        if 'global_service_charge' in vals:
+            tax = self.env['account.tax'].browse(vals['global_service_charge'])
+            self._ensure_lower_sequence(tax)
+        return super(PosConfig, self).create(vals)
+
+    def write(self, vals):
+        if 'global_service_charge' in vals:
+            tax = self.env['account.tax'].browse(vals['global_service_charge'])
+            self._ensure_lower_sequence(tax)
+        return super(PosConfig, self).write(vals)
+
+    def _ensure_lower_sequence(self, tax):
+        other_taxes = self.env['account.tax'].search([('type_tax_use', '=', 'sale'), ('id', '!=', tax.id)])
+        min_sequence = min(other_taxes.mapped('sequence')) if other_taxes else 1
+
+        # Check if the selected tax sequence is already lower or can be set lower
+        if tax.sequence >= min_sequence:
+            if tax.sequence == 1:
+                raise UserError(_('The selected global service charge tax cannot have a sequence lower than other taxes.'))
+            tax.sequence = min_sequence - 1

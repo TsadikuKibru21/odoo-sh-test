@@ -18,6 +18,7 @@ patch(Order.prototype, {
         }
         this.is_refund = false;
         this.checked = false;
+        this.waiter_name = "";
         this.fs_no = "";
         this.rf_no = "";
         this.ej_checksum = "";
@@ -26,6 +27,7 @@ patch(Order.prototype, {
         if (options.json) {
             this.set_is_refund_order(options.json.is_refund);
             this.set_checked(options.json.checked);
+            this.set_waiter_name(options.json.waiter_name);
             this.set_fs_no(options.json.fs_no);
             this.set_rf_no(options.json.rf_no);
             this.set_ej_checksum(options.json.ej_checksum);
@@ -41,6 +43,7 @@ patch(Order.prototype, {
         super.init_from_JSON(json);
         this.set_is_refund_order(json.is_refund);
         this.set_checked(json.checked);
+        this.set_waiter_name(json.waiter_name);
         this.set_fs_no(json.fs_no);
         this.set_rf_no(json.rf_no);
         this.set_ej_checksum(json.ej_checksum);
@@ -51,6 +54,7 @@ patch(Order.prototype, {
         const jsonResult = super.export_as_JSON();
         jsonResult.is_refund = this.is_refund;
         jsonResult.checked = this.checked;
+        jsonResult.waiter_name = this.waiter_name;
         jsonResult.fs_no = this.fs_no;
         jsonResult.rf_no = this.rf_no;
         jsonResult.ej_checksum = this.ej_checksum;
@@ -118,6 +122,8 @@ patch(Order.prototype, {
         return false;
     },
     async removeOrderline(line) {
+        console.log("get order");
+        console.dir(this.pos.get_order());
         if (this.pos.get_order().rf_no !== "" || this.pos.get_order().fs_no !== "") {
             this.env.services.notification.add("Not allowed to modify a order with a printed fiscal receipt", {
                 type: 'danger',
@@ -136,7 +142,6 @@ patch(Order.prototype, {
                     if (ktoItem.product_id == this.pos.get_order().get_selected_orderline().get_product().id) {
                         orderedQty = ktoItem.quantity;
                         found = true;
-                        console.log("Found in KTO");
                     }
                 });
             }
@@ -148,15 +153,15 @@ patch(Order.prototype, {
                         orderedQty: orderedQty
                     });
 
-                    let all_data = []
-                    var jsonString = JSON.stringify(this.get_data_to_store());
-                    var existingData = localStorage.getItem('VOIDED_ORDERS');
-                    if (existingData) {
-                        let parsedData = JSON.parse(existingData);
-                        all_data.push(...parsedData)
-                    }
-                    all_data.push(JSON.parse(jsonString))
-                    localStorage.setItem('VOIDED_ORDERS', JSON.stringify(all_data));
+                    // let all_data = []
+                    // var jsonString = JSON.stringify(this.get_data_to_store());
+                    // var existingData = localStorage.getItem('VOIDED_ORDERS');
+                    // if (existingData) {
+                    //     let parsedData = JSON.parse(existingData);
+                    //     all_data.push(...parsedData)
+                    // }
+                    // all_data.push(JSON.parse(jsonString))
+                    // localStorage.setItem('VOIDED_ORDERS', JSON.stringify(all_data));
 
                     if (popupResult.confirmed) {
                         super.removeOrderline(line);
@@ -186,15 +191,15 @@ patch(Order.prototype, {
                     orderedQty: 1
                 });
 
-                let all_data = []
-                var jsonString = JSON.stringify(this.get_data_to_store());
-                var existingData = localStorage.getItem('VOIDED_ORDERS');
-                if (existingData) {
-                    let parsedData = JSON.parse(existingData);
-                    all_data.push(...parsedData)
-                }
-                all_data.push(JSON.parse(jsonString))
-                localStorage.setItem('VOIDED_ORDERS', JSON.stringify(all_data));
+                // let all_data = []
+                // var jsonString = JSON.stringify(this.get_data_to_store());
+                // var existingData = localStorage.getItem('VOIDED_ORDERS');
+                // if (existingData) {
+                //     let parsedData = JSON.parse(existingData);
+                //     all_data.push(...parsedData)
+                // }
+                // all_data.push(JSON.parse(jsonString))
+                // localStorage.setItem('VOIDED_ORDERS', JSON.stringify(all_data));
 
                 if (popupResult.confirmed) {
                     super.removeOrderline(line);
@@ -244,7 +249,8 @@ patch(Order.prototype, {
                         hours,
                         minutes,
                     },
-                    date: formattedDate
+                    date: formattedDate,
+                    printing_type: this.pos.config.order_printing_type
                 };
 
                 const result = await printer.printReceipt(printingChanges, printer.config);
@@ -317,86 +323,137 @@ patch(Order.prototype, {
         let self = this;
         let order = this.pos.get_order();
         let lines = order.get_orderlines();
+        let pos_config = self.pos.config;
+        let allow_order = pos_config.pos_allow_order;
+        let deny_order = pos_config.pos_deny_order || 0;
+        let call_super = true;
         let restrict_order = false;
-        let bad_tax = false;
-        var product_names = ''
-        var bad_tax_product_names = ''
-
+        let product_names = '';
         const quantitys = lines.map(element => element.get_quantity());
 
-        if (this.isValidArray(quantitys)) {
-            if (this.pos.get_cashier().role === 'manager') {
-                if (order && lines.length > 0) {
-                    lines.forEach(function (line) {
-                        if (line.get_display_price() == 0.00 || line.price < 0.00) {
-                            restrict_order = true;
-                            product_names += '-' + line.product.display_name + "\n"
+        if (this.pos.hasAccess(this.pos.config['payment_access_level'])) {
+            this.pos.doAuthFirst('payment_access_level', 'payment_pin_lock_enabled', 'payment', async () => {
+
+                if (this.pos.config.module_pos_restaurant) {
+                    if (order.get_waiter_name() === "" || order.get_waiter_name() === undefined || !order.get_waiter_name()) {
+                        console.log("set_waiter_name at pay");
+                        order.set_waiter_name(order.cashier.name);
+                    }
+                }
+
+                // Stock check logic
+                if (pos_config.pos_display_stock) {
+                    let prod_used_qty = {};
+                    $.each(lines, function (i, line) {
+                        let prd = line.product;
+                        if (prd.type == 'product') {
+                            if (pos_config.pos_stock_type == 'onhand') {
+                                if (prd.id in prod_used_qty) {
+                                    let old_qty = prod_used_qty[prd.id][1];
+                                    prod_used_qty[prd.id] = [prd.bi_on_hand, line.quantity + old_qty]
+                                } else {
+                                    prod_used_qty[prd.id] = [prd.bi_on_hand, line.quantity]
+                                }
+                            }
+                            if (pos_config.pos_stock_type == 'available') {
+                                if (prd.id in prod_used_qty) {
+                                    let old_qty = prod_used_qty[prd.id][1];
+                                    prod_used_qty[prd.id] = [prd.bi_available, line.quantity + old_qty]
+                                } else {
+                                    prod_used_qty[prd.id] = [prd.bi_available, line.quantity]
+                                }
+                            }
                         }
-                        if (line.product.taxes_id !== undefined && line.product.taxes_id.length > 1) {
-                            bad_tax = true;
-                            bad_tax_product_names += '-' + line.product.display_name + "\n"
+                    });
+
+                    $.each(prod_used_qty, await function (i, pq) {
+                        let product = self.pos.db.get_product_by_id(i);
+                        if (allow_order == false && pq[0] < pq[1]) {
+                            call_super = false;
+                            self.pos.popup.add(ErrorPopup, {
+                                title: _t('Deny Order'),
+                                body: _t("Deny Order" + "(" + product.display_name + ")" + " is Out of Stock."),
+                            });
+                        }
+                        let check = pq[0] - pq[1];
+                        if (allow_order == true && check < deny_order) {
+                            call_super = false;
+                            self.pos.popup.add(ErrorPopup, {
+                                title: _t('Deny Order'),
+                                body: _t("Deny Order" + "(" + product.display_name + ")" + " is Out of Stock."),
+                            });
                         }
                     });
                 }
-                else {
-                    restrict_order = true;
-                }
 
-                if (restrict_order || bad_tax) {
+                // Check for zero price
+                if (this.isValidArray(quantitys)) {
+                    if (order && lines.length > 0) {
+                        lines.forEach(function (line) {
+                            if (line.get_display_price() == 0.00 || line.price < 0.00) {
+                                restrict_order = true;
+                                product_names += '-' + line.product.display_name + "\n"
+                            }
+                        });
+                    } else {
+                        restrict_order = true;
+                    }
+
                     if (restrict_order) {
                         if (product_names) {
                             self.env.services.popup.add(ErrorPopup, {
                                 'title': _t("Product With 0 Price"),
                                 'body': _t('You are not allowed to have the zero prices on the order line.\n %s', product_names),
                             });
-                        }
-                        else {
+                        } else {
                             self.env.services.popup.add(ErrorPopup, {
                                 'title': _t("Empty Order"),
                                 'body': _t('There must be at least one product in your order before it can be validated.'),
                             });
                         }
-                    }
-
-                    if (bad_tax) {
-                        self.env.services.popup.add(ErrorPopup, {
-                            'title': _t("Product With 0 Price"),
-                            'body': _t('Products with multiple tax rates detected.\n %s', product_names),
-                        });
-                    }
-                }
-                else {
-                    // Check if the sale/refund state matches the POS mode
-                    let isSale = this.isSaleOrder(quantitys);
-                    if (isSale !== !this.pos.is_refund_order()) {
-                        self.env.services.popup.add(ErrorPopup, {
-                            'title': _t("Order Mode Conflict"),
-                            'body': _t('The order type does not match the POS mode. Ensure all items are appropriate for a sale or refund.'),
-                        });
                     } else {
-                        super.pay();
+                        // Check if the sale/refund state matches the POS mode
+                        let isSale = this.isSaleOrder(quantitys);
+                        if (isSale !== !this.pos.is_refund_order()) {
+                            self.env.services.popup.add(ErrorPopup, {
+                                'title': _t("Order Mode Conflict"),
+                                'body': _t('The order type does not match the POS mode. Ensure all items are appropriate for a sale or refund.'),
+                            });
+                        } else {
+                            if (call_super) {
+                                super.pay();
+                            }
+                        }
                     }
+                } else {
+                    this.env.services.notification.add("Access Denied", {
+                        type: 'danger',
+                        sticky: false,
+                        timeout: 10000,
+                    });
                 }
-            }
-            else {
-                this.env.services.notification.add("Access Denied", {
-                    type: 'danger',
-                    sticky: false,
-                    timeout: 10000,
-                });
-            }
+            });
         }
         else {
-            self.env.services.popup.add(ErrorPopup, {
-                'title': _t("Invalid Order"),
-                'body': _t('Can not have positive and negative amount values in a single order'),
+            this.env.services.notification.add(_t("Access Denied"), {
+                type: 'danger',
+                sticky: false,
+                timeout: 10000,
             });
         }
     },
     set_orderline_options(orderline, options) {
         super.set_orderline_options(orderline, options);
-        if (orderline.product.service_charge !== undefined) {
-            orderline.set_service_charge(orderline.product.service_charge);
+        if (this.pos.config.pos_module_pos_service_charge) {
+            let self = this;
+            this.pos.get_order().orderlines.forEach(function (line) {
+                line.set_service_charge(self.pos.config.global_service_charge[0]);
+            });
+        }
+        else {
+            if (orderline.product.service_charge) {
+                orderline.set_service_charge(orderline.product.service_charge[0]);
+            }
         }
     },
     is_checked() {
@@ -404,6 +461,12 @@ patch(Order.prototype, {
     },
     set_checked(value) {
         this.checked = value;
+    },
+    get_waiter_name() {
+        return this.waiter_name;
+    },
+    set_waiter_name(value) {
+        this.waiter_name = value;
     },
     is_refund_order() {
         return this.is_refund;
@@ -441,12 +504,96 @@ patch(Order.prototype, {
     set_payment_qr_code(qr_code_str) {
         this.payment_qr_code_str = qr_code_str;
     },
+    getTaxIdNotServiceCharge(orderline) {
+        // console.log("Function getTaxIdNotServiceCharge called with orderline:", orderline);
+
+        if (this.pos.config.pos_module_pos_service_charge) {
+            // console.log("Service charge module is enabled.");
+            var serviceChargeTaxId = this.pos.config.global_service_charge[0];
+            // console.log("Global service charge ID:", serviceChargeTaxId);
+
+            var taxAmount = 0;
+            if (orderline.product.taxes_id !== undefined || orderline.product.taxes_id !== false) {
+                // console.log("Product has taxes_id:", orderline.product.taxes_id);
+                var filteredTaxs = orderline.product.taxes_id.filter(taxId => serviceChargeTaxId !== taxId);
+                // console.log("Filtered taxes (excluding service charge tax):", filteredTaxs);
+
+                if (filteredTaxs.length > 0) {
+                    taxAmount = this.pos.taxes_by_id[filteredTaxs[0]].amount;
+                    // console.log("Tax amount for filtered tax:", taxAmount);
+                } else {
+                    // console.log("No taxes available after filtering.");
+                    taxAmount = 0;
+                }
+            } else {
+                // console.log("No taxes defined for the product.");
+                taxAmount = 0;
+            }
+            // console.log(taxAmount);
+            return taxAmount;
+        } else {
+            // console.log("Service charge module is not enabled.");
+            var serviceChargeTaxId = undefined;
+            var taxAmount = 0;
+
+            if (orderline.product.service_charge !== undefined || orderline.product.service_charge !== false) {
+                // console.log("Service charge defined for product:", orderline.product.service_charge);
+                serviceChargeTaxId = orderline.product.service_charge[0];
+            } else {
+                // console.log("No service charge or it is undefined/false.");
+            }
+
+            if (serviceChargeTaxId !== undefined) {
+                // console.log("Service charge ID:", serviceChargeTaxId);
+                var filteredTaxs = orderline.product.taxes_id.filter(taxId => serviceChargeTaxId !== taxId);
+                // console.log("Filtered taxes (excluding service charge tax):", filteredTaxs);
+
+                if (filteredTaxs.length > 0) {
+                    taxAmount = this.pos.taxes_by_id[filteredTaxs[0]].amount;
+                    // console.log("Tax amount for filtered tax:", taxAmount);
+                } else {
+                    // console.log("No taxes available after filtering.");
+                    taxAmount = 0;
+                }
+            } else {
+                // console.log("Service charge ID is undefined.");
+                // console.log(orderline.product.taxes_id !== undefined);
+                // console.log(orderline.product.taxes_id !== false);
+
+                if (orderline.product.taxes_id !== undefined || orderline.product.taxes_id !== false) {
+                    // console.log("inside this");
+                    taxAmount = this.pos.taxes_by_id[orderline.product.taxes_id[0]].amount;
+
+                }
+            }
+            // console.log(taxAmount);
+            return taxAmount;
+        }
+    },
+    splitAndPadText(text, lineLength) {
+        let lines = [];
+        while (text.length > lineLength) {
+            lines.push(text.slice(0, lineLength));
+            text = text.slice(lineLength);
+        }
+        // Add the last part, padded if necessary
+        lines.push(text.padEnd(lineLength, ' '));
+        return lines;
+    },
+    truncateText(text, length) {
+        if (text.length > length) {
+            return text.slice(0, length);
+        }
+        return text.padEnd(length, ' ');
+    },
     async printFiscalReceipt() {
         if (!await this.pos.correctTimeConfig()) {
             return;
         }
 
         var receiptData = this.export_for_printing();
+        console.dir("=========receiptData");
+        console.dir(this);
         receiptData.tenant = "odoo17";
         receiptData.client = this.get_partner();
 
@@ -468,6 +615,7 @@ patch(Order.prototype, {
         // this.set_payment_qr_code("This is a place for Payment QR code only");
 
         let extractedOrderlines = orderlinesFromOrder.map(orderline => {
+
             return {
                 id: orderline.product.id,
                 pluCode: orderline.product.default_code ? orderline.product.default_code : "0000",
@@ -476,20 +624,21 @@ patch(Order.prototype, {
                 quantity: orderline.quantity,
                 unitName: "PC",
                 unitPrice: orderline.price,
-                taxRate: orderline.product.taxes_id === undefined ? 0 : orderline.product.taxes_id.length > 0 ? this.pos.taxes_by_id[orderline.product.taxes_id[0]].amount : 0,
+                // taxRate: orderline.product.taxes_id === undefined ? 0 : orderline.product.taxes_id.length > 0 ? this.pos.taxes_by_id[orderline.product.taxes_id[0]].amount : 0,
+                taxRate: this.getTaxIdNotServiceCharge(orderline),
                 discountAmount: orderline.discount,
                 discountType: "percentage",
-                serviceChargeAmount: orderline.service_charge,
+                serviceChargeAmount: !orderline.product.service_charge ? 0 : this.pos.taxes_by_id[orderline.product.service_charge[0]].amount,
                 serviceChargeType: "percentage"
             };
         });
 
-        var local_data = localStorage.getItem('VOIDED_ORDERS');
-        var voided_filtered_data = [];
-        if (local_data) {
-            var parsedData = JSON.parse(local_data);
-            voided_filtered_data = parsedData.filter(item => item.name === this.name);
-        }
+        // var local_data = localStorage.getItem('VOIDED_ORDERS');
+        // var voided_filtered_data = [];
+        // if (local_data) {
+        //     var parsedData = JSON.parse(local_data);
+        //     voided_filtered_data = parsedData.filter(item => item.name === this.name);
+        // }
 
         // Get customer discount
         let customerDiscount = 0;
@@ -507,20 +656,42 @@ patch(Order.prototype, {
             globalDiscountAmount = customerDiscount;
         }
 
+        var headerText = receiptData.headerData.header !== false ? receiptData.headerData.header : "";
+
+        // Ensure headerText lines do not exceed 31 characters
+        var headerLines = this.splitAndPadText(headerText, 31);
+
+        // Check if additional text needs to be appended
+        if (this.pos.config.show_waiter_table_on_fiscal_receipt && this.pos.config.module_pos_restaurant) {
+            var waiterText = "Waiter : " + this.get_waiter_name();
+            var tableText = "Table : " + this.pos.tables_by_id[this.tableId].name;
+
+            // Truncate and pad waiterText and tableText to fit 31 characters each
+            waiterText = this.truncateText(waiterText, 31);
+            tableText = this.truncateText(tableText, 31);
+
+            // Add the waiter and table text as new lines
+            headerLines.push(waiterText, tableText);
+        }
+
+        // Join all lines ensuring proper formatting
+        headerText = headerLines.join('');
+
         var forSunmi = {
             orderlines: extractedOrderlines,
-            voidedOrderLines: voided_filtered_data,
+            // voidedOrderLines: voided_filtered_data,
+            voidedOrderLines: [],
             customer: customer,
             paymentType: (receiptData.paymentlines && receiptData.paymentlines.length > 0) ? receiptData.paymentlines[0].name : "CASH",
             paidAmount: receiptData.total_paid,
             qrCode: this.get_payment_qr_code(),
             change: receiptData.change,
-            headerText: receiptData.headerData.header !== false ? receiptData.headerData.header : "",
+            headerText: headerText,
             footerText: receiptData.footer !== false ? receiptData.footer : "",
             cashier: receiptData.cashier,
             ref: receiptData.name,
             globalServiceChargeType: "Percentage",
-            globalServiceChargeAmount: this.pos.config.pos_module_pos_service_charge ? this.pos.config.global_service_charge : 0,
+            globalServiceChargeAmount: this.pos.config.pos_module_pos_service_charge ? this.pos.taxes_by_id[this.pos.config.global_service_charge[0]].amount : 0,
             globalDiscountType: "Percentage",
             globalDiscountAmount: globalDiscountAmount,
             commercialLogo: this.pos.config.receipt_image
@@ -531,7 +702,7 @@ patch(Order.prototype, {
 
                 var result;
                 if (isRefundOrder) {
-                    result = windows.Android.printRefundInvoice(JSON.stringify(forSunmi));
+                    result = window.Android.printRefundInvoice(JSON.stringify(forSunmi));
                     this.pos.makeLogEntry("Printing Refund Invoice Request => " + JSON.stringify(forSunmi));
                 }
                 else {
@@ -546,20 +717,20 @@ patch(Order.prototype, {
 
                     if (this.is_refund) {
                         this.date_order = luxon.DateTime.fromFormat(responseObject.date + " " + responseObject.time, 'dd/MM/yyyy HH:mm', { zone: 'Africa/Addis_Ababa' });
-                        this.env.services.notification.add(responseObject.date + " " + responseObject.time, {
-                            type: 'danger',
-                            sticky: false,
-                            timeout: 10000,
-                        });
+                        // this.env.services.notification.add(responseObject.date + " " + responseObject.time, {
+                        //     type: 'danger',
+                        //     sticky: false,
+                        //     timeout: 10000,
+                        // });
                         this.set_rf_no(responseObject.rfdNo);
                     }
                     else {
                         this.date_order = luxon.DateTime.fromFormat(responseObject.date + " " + responseObject.time, 'dd/MM/yyyy HH:mm', { zone: 'Africa/Addis_Ababa' });
-                        this.env.services.notification.add(responseObject.date + " " + responseObject.time, {
-                            type: 'danger',
-                            sticky: false,
-                            timeout: 10000,
-                        });
+                        // this.env.services.notification.add(responseObject.date + " " + responseObject.time, {
+                        //     type: 'danger',
+                        //     sticky: false,
+                        //     timeout: 10000,
+                        // });
                         this.set_fs_no(responseObject.fsNo);
                     }
                     this._printed = true;
@@ -623,6 +794,16 @@ patch(Order.prototype, {
             return false;
         }
     },
+
+    product_total() {
+        let order = this.pos.get_order();
+        var orderlines = order.get_orderlines();
+        return orderlines.length;
+    },
+
+    set_interval(interval) {
+        this.interval = interval;
+    },
 });
 
 patch(Orderline.prototype, {
@@ -637,7 +818,7 @@ patch(Orderline.prototype, {
     },
     init_from_JSON(json) {
         super.init_from_JSON(json);
-        this.set_service_charge(json.service_charge);
+        // this.set_service_charge(json.service_charge);
     },
     export_as_JSON() {
         const jsonResult = super.export_as_JSON();
@@ -649,25 +830,22 @@ patch(Orderline.prototype, {
         orderlineClone.service_charge = this.service_charge;
         return orderlineClone;
     },
-    set_service_charge(service_charge) {
-        var parsed_service_charge =
-            typeof service_charge === "number"
-                ? service_charge
-                : isNaN(parseFloat(service_charge))
-                    ? 0
-                    : oParseFloat("" + service_charge);
-        var sc = Math.min(Math.max(parsed_service_charge || 0, 0), 100);
-        this.service_charge = sc;
-        this.service_chargeStr = "" + sc;
+    set_service_charge(service_charge_tax_id) {
+        var taxes_ids = this.tax_ids || this.get_product().taxes_id;
+
+        // Add the new tax ID at the beginning
+        var new_tax_id = service_charge_tax_id; // Replace with your actual tax ID
+        if (!taxes_ids.includes(new_tax_id)) {
+            taxes_ids.unshift(new_tax_id);
+        }
+
+        this.tax_ids = taxes_ids;
+        // console.dir("==== AFTER SERVICE CHARGE IS ADDED ====");
+        // console.dir(this.tax_ids);
     },
     get_all_prices(qty = this.get_quantity()) {
         var self = this;
         if (!this.order.is_refund && (this.order.state != 'done' || this.order.state != 'paid')) {
-            if (this.order.pos.config.pos_module_pos_service_charge) {
-                this.order.orderlines.forEach(function (line) {
-                    line.set_service_charge(self.order.pos.config.global_service_charge);
-                });
-            }
             if (this.order.pos.config.module_pos_discount) {
                 this.order.orderlines.forEach(function (line) {
                     line.set_discount(self.order.pos.config.discount_pc);
@@ -693,10 +871,8 @@ patch(Orderline.prototype, {
         }
 
         var price_unit = this.get_unit_price() * (1.0 - this.get_discount() / 100.0);
-
-        price_unit += price_unit * (this.service_charge / 100.0);
-
         var taxtotal = 0;
+
         var product = this.get_product();
         var taxes_ids = this.tax_ids || product.taxes_id;
         taxes_ids = taxes_ids.filter((t) => t in this.pos.taxes_by_id);
@@ -709,7 +885,6 @@ patch(Orderline.prototype, {
             qty,
             this.pos.currency.rounding
         );
-
         var all_taxes_before_discount = this.compute_all(
             product_taxes,
             this.get_unit_price(),

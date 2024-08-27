@@ -6,6 +6,8 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='taxes_id']" position="after">
                 <field name="service_charge"/>
+                <field name="product_count"/>
+                <field name="check_quant"/>
             </xpath>
         </field>
     </record>

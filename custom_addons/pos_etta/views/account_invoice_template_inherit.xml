@@ -62,17 +62,17 @@
 
         </xpath>
 
-        <xpath expr="//table[@name='invoice_line_table']/thead/tr/th[@name='th_discount']"
+        <!-- <xpath expr="//table[@name='invoice_line_table']/thead/tr/th[@name='th_discount']"
             position="after">
             <th name="th_service_charge" class="text-end">
                 <span>Service Charge</span>
             </th>
-        </xpath>
-        <xpath expr="//td[@name='td_discount']" position="after">
+        </xpath> -->
+        <!-- <xpath expr="//td[@name='td_discount']" position="after">
             <td name="td_service_charge" class="text-end o_service_charge">
                 <span class="text-nowrap" t-field="line.service_charge">-</span>
             </td>
-        </xpath>
+        </xpath> -->
 
         <xpath expr="//div[hasclass('page')]" position="inside">
             <img src="/pos_etta/static/img/attachment12.png" alt="Attachment"

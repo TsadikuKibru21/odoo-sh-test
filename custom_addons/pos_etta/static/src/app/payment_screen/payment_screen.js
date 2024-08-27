@@ -147,6 +147,72 @@ patch(ProductScreen.prototype, {
         } else {
             super.onNumpadClick(buttonValue);
         }
+    },
+    _parsePriceAndWieght(code) {
+        const scanned_code = code.base_code.toString();
+        const product_code = scanned_code.substring(1, 6);
+        const weight_value = parseInt(scanned_code.substring(6, 11)) / 1000;
+        const unit_price_value_with_vat = parseInt(scanned_code.substring(11, scanned_code.length)) / 100;
+
+        const unit_price_value = (unit_price_value_with_vat) / 1.15;
+
+        return [product_code, unit_price_value, weight_value];
+    },
+    async _barcodeProductAction(code) {
+        const calc = code.base_code.toString().length == 18 ? true : false;
+        const [product_code, parsed_price, parsed_weight] = calc ? this._parsePriceAndWieght(code) : [code.base_code, 0.00, 0.00];
+
+        var product_code_new = { base_code: product_code };
+
+        this.notification.add(_t("PC - " + product_code + ", PP - " + parsed_price + ", PW - " + parsed_weight), 3000);
+
+        const product = await this._getProductByBarcode(product_code_new);
+        if (!product) {
+            return this.popup.add(ErrorBarcodePopup, { code: code.base_code });
+        }
+        const options = await product.getAddProductOptions(code);
+        // Do not proceed on adding the product when no options is returned.
+        // This is consistent with clickProduct.
+        if (!options) {
+            return;
+        }
+
+        // update the options depending on the type of the scanned code
+        if (code.type === "price") {
+            Object.assign(options, {
+                price: code.value,
+                extras: {
+                    price_type: "manual",
+                },
+            });
+        } else if (code.type === "weight" || code.type === "quantity") {
+            Object.assign(options, {
+                quantity: code.value,
+                merge: false,
+            });
+        } else if (code.type === "discount") {
+            Object.assign(options, {
+                discount: code.value,
+                merge: false,
+            });
+        }
+
+        if (calc) {
+            Object.assign(options, {
+                quantity: parsed_weight,
+                merge: false,
+            });
+            if (code.base_code.toString().substring(0, 2) != '24') {
+                Object.assign(options, {
+                    price: parsed_price,
+                    extras: {
+                        price_manually_set: true,
+                    },
+                });
+            }
+        }
+        this.currentOrder.add_product(product, options);
+        this.numberBuffer.reset();
     }
 });
 
@@ -164,6 +230,14 @@ patch(ActionpadWidget.prototype, {
         if (confirmed) {
             let bad_order = false;
             let product_names = '';
+
+            if (this.pos.config.module_pos_restaurant) {
+                if (this.pos.get_order().get_waiter_name() === "" || this.pos.get_order().get_waiter_name() === undefined || !this.pos.get_order().get_waiter_name()) {
+                    console.log("set_waiter_name at submitOrder");
+                    this.pos.get_order().set_waiter_name(this.pos.get_order().cashier.name);
+                }
+            }
+
             this.pos.get_order().orderlines.forEach(line => {
                 if (line.get_display_price() == 0.00 || line.price < 0.00) {
                     bad_order = true;

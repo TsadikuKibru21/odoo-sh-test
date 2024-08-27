@@ -3,7 +3,15 @@ from odoo import fields, models
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
 
-    global_service_charge =  fields.Float(related='pos_config_id.global_service_charge', readonly=False)
+    global_service_charge = fields.Many2one(
+        'account.tax', 
+        string='Global Service Charge', 
+        related='pos_config_id.global_service_charge', 
+        readonly=False, 
+        domain=[('type_tax_use', '=', 'sale'), ('include_base_amount', '=', True)],
+        help='Reference to the global service charge tax'
+    )
+    # global_service_charge =  fields.Float(related='pos_config_id.global_service_charge', readonly=False)
     pos_module_pos_service_charge = fields.Boolean(related='pos_config_id.pos_module_pos_service_charge', readonly=False)
     serial_number = fields.Char(related='pos_config_id.serial_number',readonly=False)
     fiscal_mrc = fields.Char(related='pos_config_id.fiscal_mrc',readonly=False)
@@ -54,3 +62,14 @@ class ResConfigSettings(models.TransientModel):
     gprs_upload_access_level = fields.Selection(related='pos_config_id.gprs_upload_access_level', readonly=False)
     gprs_upload_pin_lock_enabled = fields.Boolean(related='pos_config_id.gprs_upload_pin_lock_enabled', readonly=False)
     gprs_upload_pin_code = fields.Char(related='pos_config_id.gprs_upload_pin_code', readonly=False)
+
+    payment_access_level = fields.Selection(related='pos_config_id.payment_access_level', readonly=False)
+    payment_pin_lock_enabled = fields.Boolean(related='pos_config_id.payment_pin_lock_enabled', readonly=False)
+    payment_pin_code = fields.Char(related='pos_config_id.payment_pin_code', readonly=False)
+
+    discount_access_level = fields.Selection(related='pos_config_id.discount_access_level', readonly=False)
+
+    order_printing_type = fields.Selection(related='pos_config_id.order_printing_type', readonly=False)
+    create_mrp_order = fields.Boolean(related='pos_config_id.create_mrp_order', readonly=False)
+    is_done = fields.Boolean(related='pos_config_id.is_done', readonly=False)  
+    show_waiter_table_on_fiscal_receipt = fields.Boolean(related='pos_config_id.show_waiter_table_on_fiscal_receipt', readonly=False)

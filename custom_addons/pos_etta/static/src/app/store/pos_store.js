@@ -75,6 +75,9 @@ patch(PosStore.prototype, {
             case 'quantity_change_and_remove':
                 pinText = "Enter Qunatity Change or Remove Orderline PIN";
                 break;
+            case 'payment':
+                pinText = "Enter Payment Access PIN";
+                break;
             default:
                 pinText = "Enter PIN";
                 break;
@@ -126,6 +129,9 @@ patch(PosStore.prototype, {
                 break;
             case 'quantity_change_and_remove':
                 correctPin = this.config.allow_quantity_change_and_remove_orderline_pin_code === inputPin;
+                break;
+            case 'payment':
+                correctPin = this.config.payment_pin_code === inputPin;
                 break;
             default:
                 correctPin = false;
@@ -337,8 +343,8 @@ patch(PosStore.prototype, {
         }
     },
     async syncPosOrderWithFP() {
-        console.dir("luxon date");
-        console.dir(luxon.DateTime.now());
+        // console.dir("luxon date");
+        // console.dir(luxon.DateTime.now());
         this.doAuthFirst('sync_fp_pin_access_level', 'sync_fp_pin_lock_enabled', 'sync_fp', async () => {
             // Display syncing notification
             this.env.services.notification.add('Syncing POS Orders Started...', {
@@ -424,7 +430,7 @@ patch(PosStore.prototype, {
                             const dateTimeString = `${year}-${month}-${day} ${time}:00`;
                             const dateTime = new Date(dateTimeString);
                             dateTime.setHours(dateTime.getHours() + 3);
-    
+
                             const datetimeString = serializeDateTime(luxon.DateTime.fromFormat(fsNoData.date + " " + fsNoData.time, 'dd/MM/yyyy HH:mm', { zone: 'Africa/Addis_Ababa' }));
                             const globalServiceCharge = fsNoData.globalServiceCharge;
                             const globalDiscount = fsNoData.globalDiscount;
@@ -443,15 +449,15 @@ patch(PosStore.prototype, {
                                 });
 
                                 // Update order lines if globalServiceCharge or globalDiscount are greater than 0
-                                if (globalServiceCharge > 0 || globalDiscount > 0) {
-                                    const posOrderLineIds = await this.orm.search('pos.order.line', [['order_id', 'in', posOrderIds]]);
-                                    for (const lineId of posOrderLineIds) {
-                                        await this.orm.write('pos.order.line', [lineId], {
-                                            service_charge: globalServiceCharge > 0 ? globalServiceCharge : 0,
-                                            discount: globalDiscount > 0 ? globalDiscount : 0
-                                        });
-                                    }
-                                }
+                                // if (globalServiceCharge > 0 || globalDiscount > 0) {
+                                //     const posOrderLineIds = await this.orm.search('pos.order.line', [['order_id', 'in', posOrderIds]]);
+                                //     for (const lineId of posOrderLineIds) {
+                                //         await this.orm.write('pos.order.line', [lineId], {
+                                //             service_charge: globalServiceCharge > 0 ? globalServiceCharge : 0,
+                                //             discount: globalDiscount > 0 ? globalDiscount : 0
+                                //         });
+                                //     }
+                                // }
 
                                 console.log(`Updated pos.order record with pos_reference ${posReference} successfully.`);
                             } else {
@@ -483,7 +489,7 @@ patch(PosStore.prototype, {
                             const time = rfNoData.time;
                             const dateTimeString = `${year}-${month}-${day} ${time}:00`;
                             const dateTime = new Date(dateTimeString);
-    
+
                             const datetimeString = serializeDateTime(luxon.DateTime.fromFormat(rfNoData.date + " " + rfNoData.time, 'dd/MM/yyyy HH:mm', { zone: 'Africa/Addis_Ababa' }));
 
                             const globalServiceCharge = rfNoData.globalServiceCharge;
@@ -502,15 +508,15 @@ patch(PosStore.prototype, {
                                     is_refund: true
                                 });
 
-                                if (globalServiceCharge > 0 || globalDiscount > 0) {
-                                    const posOrderLineIds = await this.orm.search('pos.order.line', [['order_id', 'in', posOrderIds]]);
-                                    for (const lineId of posOrderLineIds) {
-                                        await this.orm.write('pos.order.line', [lineId], {
-                                            service_charge: globalServiceCharge > 0 ? globalServiceCharge : 0,
-                                            discount: globalDiscount > 0 ? globalDiscount : 0
-                                        });
-                                    }
-                                }
+                                // if (globalServiceCharge > 0 || globalDiscount > 0) {
+                                //     const posOrderLineIds = await this.orm.search('pos.order.line', [['order_id', 'in', posOrderIds]]);
+                                //     for (const lineId of posOrderLineIds) {
+                                //         await this.orm.write('pos.order.line', [lineId], {
+                                //             service_charge: globalServiceCharge > 0 ? globalServiceCharge : 0,
+                                //             discount: globalDiscount > 0 ? globalDiscount : 0
+                                //         });
+                                //     }
+                                // }
 
                                 console.log(`Updated pos.order record with pos_reference ${posReference} successfully.`);
                             } else {
@@ -620,6 +626,7 @@ patch(PosStore.prototype, {
         await super._processData(...arguments);
         this.void_reasons = loadedData["void.reason"];
         this.taxes = loadedData["account.tax"];
+        this.custom_stock_locations = loadedData['stock.location'] || [];
 
         // if (window.Android != undefined) {
         //     if (window.Android.isAndroidPOS()) {
@@ -644,5 +651,93 @@ patch(PosStore.prototype, {
         //     alert("Error: Invalid Device");
         //     window.history.back();
         // }
+    },
+    async addProductToCurrentOrder(product, options = {}) {
+        let self = this;
+        let pos_config = self.config;
+        let allow_order = pos_config.pos_allow_order;
+        let deny_order = pos_config.pos_deny_order || 0;
+        let call_super = true;
+
+        if (pos_config.pos_display_stock && product.type == 'product') {
+            if (allow_order == false) {
+                if (pos_config.pos_stock_type == 'onhand') {
+                    if (product.bi_on_hand <= 0) {
+                        call_super = false;
+                        self.popup.add(ErrorPopup, {
+                            title: _t('Deny Order'),
+                            body: _t("Deny Order" + "(" + product.display_name + ")" + " is Out of Stock."),
+                        });
+                    }
+                }
+                if (pos_config.pos_stock_type == 'available') {
+                    if (product.bi_available <= 0) {
+                        call_super = false;
+                        self.popup.add(ErrorPopup, {
+                            title: _t('Deny Order'),
+                            body: _t("Deny Order" + "(" + product.display_name + ")" + " is Out of Stock."),
+                        });
+                    }
+                }
+            } else {
+                if (pos_config.pos_stock_type == 'onhand') {
+                    if (product.bi_on_hand <= deny_order) {
+                        call_super = false;
+                        self.popup.add(ErrorPopup, {
+                            title: _t('Deny Order'),
+                            body: _t("Deny Order" + "(" + product.display_name + ")" + " is Out of Stock."),
+                        });
+                    }
+                }
+                if (pos_config.pos_stock_type == 'available') {
+                    if (product.bi_available <= deny_order) {
+                        call_super = false;
+                        self.popup.add(ErrorPopup, {
+                            title: _t('Deny Order'),
+                            body: _t("Deny Order" + "(" + product.display_name + ")" + " is Out of Stock."),
+                        });
+                    }
+                }
+            }
+        }
+        if (call_super) {
+            super.addProductToCurrentOrder(product, options = {});
+        }
+    },
+    _loadProductProduct(products) {
+        var processProducts = [];
+        if (this.config.pos_module_pos_service_charge) {
+            processProducts = products
+                .filter(product => product.taxes_id.length == 1 || product.taxes_id.length == 0)
+                .map(product => {
+                    var taxes_ids = product.taxes_id;
+                    var new_tax_id = this.config.global_service_charge[0];
+                    if (!taxes_ids.includes(new_tax_id)) {
+                        taxes_ids.unshift(new_tax_id);
+                    }
+
+                    product.taxes_id = taxes_ids;
+
+                    return product;
+                });
+        }
+        else {
+            processProducts = products
+                .filter(product => product.taxes_id.length == 1 || product.taxes_id.length == 0)
+                .map(product => {
+                    if (product.service_charge) {
+                        var taxes_ids = product.taxes_id;
+                        var new_tax_id = product.service_charge[0];
+                        if (!taxes_ids.includes(new_tax_id)) {
+                            taxes_ids.unshift(new_tax_id);
+                        }
+
+                        product.taxes_id = taxes_ids;
+                    }
+
+                    return product;
+                });
+        }
+        super._loadProductProduct(processProducts);
     },
 });

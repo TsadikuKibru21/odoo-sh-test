@@ -39,6 +39,9 @@
             <li class="menu-item navbar-button" t-if="pos.config.z_report_access_level === 'both' or (pos.config.z_report_access_level === 'basic' and pos.get_cashier().role !== 'manager') or (pos.config.z_report_access_level === 'advanced' and pos.get_cashier().role === 'manager')" t-on-click="onZReportClick">
                 <a class="dropdown-item py-2">Print Z-Report</a>
             </li>
+            <li class="menu-item navbar-button" t-on-click="onLowStockClick">
+                <a class="dropdown-item py-2">Low Stock</a>
+            </li>
         </xpath>
 
         <!-- <xpath expr="//li[contains(@class, 'close-button')]" position="replace">

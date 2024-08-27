@@ -20,15 +20,20 @@ patch(PartnerDetailsEdit.prototype, {
         }
 
         if (this.pos.hasAccess(this.pos.config['allow_price_change'])) {
+            console.log("Access NOT Denied");
             this.pos.doAuthFirst('allow_price_change', 'price_change_pin_lock_enabled', 'price_change', async () => {
                 return super.saveChanges(...arguments);
             });
         }
         else {
+            console.log("Access Denied");
             return this.popup.add(ErrorPopup, {
                 title: _t("Access Denied"),
                 body: _t("You are not allowed to change customer data"),
             });
         }
     },
+    get hasDiscountAccess(){
+        return this.pos.hasAccess(this.pos.config['z_report_access_level']);
+    }
 });
