@@ -80,16 +80,32 @@ class stock_quant(models.Model):
         prod_fields = ssn_obj._loader_params_product_product()['search_params']['fields']
         prod_obj = self.env['product.product'].sudo()
 
-        product = prod_obj.with_context(display_default_code=False).search_read([('id', '=', prd_id)],prod_fields)
-        product_id = prod_obj.search([('id', '=', prd_id)])
+        # Perform the search_read operation
+        product = prod_obj.with_context(display_default_code=False).search_read([('id', '=', prd_id)], prod_fields)
+        
+        # Ensure that the product list is not empty
+        if not product:
+            return True  # Or handle the situation differently if needed
 
-        res = product_id._compute_quantities_dict(self._context.get('lot_id'), self._context.get('owner_id'), self._context.get('package_id'), self._context.get('from_date'), self._context.get('to_date'))
+        product_id = prod_obj.search([('id', '=', prd_id)])
+        
+        # Compute the quantities
+        res = product_id._compute_quantities_dict(
+            self._context.get('lot_id'), 
+            self._context.get('owner_id'), 
+            self._context.get('package_id'), 
+            self._context.get('from_date'), 
+            self._context.get('to_date')
+        )
+        
+        # Update qty_available based on the computed quantities
         if product_id.id in res:
             product[0]['qty_available'] = res[product_id.id]['qty_available']
         else:
-            product[0]['qty_available'] = 0  # Or handle it in another appropriate way
-        # product[0]['qty_available'] = res[product_id.id]['qty_available']
-        if product :
+            product[0]['qty_available'] = 0  # Default value
+
+        # Further processing if product exists
+        if product:
             categories = ssn_obj._get_pos_ui_product_category(ssn_obj._loader_params_product_category())
             product_category_by_id = {category['id']: category for category in categories}
             product[0]['categ'] = product_category_by_id[product[0]['categ_id'][0]]
@@ -97,11 +113,14 @@ class stock_quant(models.Model):
             vals = {
                 'id': [product[0].get('id')], 
                 'product': product,
-                'access':'pos.sync.product',
+                'access': 'pos.sync.product',
             }
-            notifications.append([self.env.user.partner_id,'product.product/sync_data',vals])
-        if len(notifications) > 0:
+            notifications.append([self.env.user.partner_id, 'product.product/sync_data', vals])
+        
+        # Send notifications if there are any
+        if notifications:
             self.env['bus.bus']._sendmany(notifications)
+        
         return True
 
     @api.model
