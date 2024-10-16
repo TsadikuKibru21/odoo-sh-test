@@ -110,6 +110,10 @@ patch(Order.prototype, {
 
         return dataToStore;
     },
+    generate_unique_id() {
+        var unique_id = super.generate_unique_id();
+        return unique_id + "1";
+    },
     isFiscalPrinted() {
         if (this.pos.get_order().is_refund && this.pos.get_order().rf_no !== "") {
             return true;
