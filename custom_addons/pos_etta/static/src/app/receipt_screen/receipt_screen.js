@@ -24,10 +24,18 @@ patch(ReprintReceiptScreen.prototype, {
                 if (window.Android != undefined) {
                     if (window.Android.isAndroidPOS()) {
                         if (this.props.order.is_refund) {
+                            if (this.props.order.fs_no == "" || this.props.order.fs_no == false) {
+                                return await this.props.order.printFiscalReceipt()
+                            }
+
                             var result = window.Android.rePrintRefundInvoice(this.props.order.name);
                             this.pos.makeLogEntry("RePrint Sales Invoice Request => " + this.props.order.name);
                         }
                         else {
+                            if (this.props.order.fs_no == "" || this.props.order.fs_no == false) {
+                                return await this.props.order.printFiscalReceipt()
+                            }
+
                             var result = window.Android.rePrintSalesInvoice(this.props.order.name);
                             this.pos.makeLogEntry("RePrint Sales Invoice Request => " + this.props.order.name);
                         }
