@@ -25,6 +25,7 @@ class VoidedOrders(models.Model):
     unit_price = fields.Float(string='Unit Price')
     quantity = fields.Float(string='Quantity')
     reason_id = fields.Char(string='Reason')
+    waiter_name = fields.Char(string='Waiter Name')
     def unlink(self):
         return False
     def write(self, vals):

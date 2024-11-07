@@ -25,6 +25,29 @@ class OrderPrinterController(http.Controller):
             _logger.info(e)
             return False
         
+    @http.route('/create_multi_void_reason', type='json', auth='public', csrf=False)
+    def create_multi_void_endpoint(self, **kw):
+        try:
+            # Ensure we have multiple entries
+            data_entries = kw.get("data", [])
+            
+            if isinstance(data_entries, list):
+                for entry in data_entries:
+                    # Create a record for each entry in the data array
+                    request.env['voided.orders'].create({
+                        'order_id': entry.get("order_id"),
+                        'cashier': entry.get("cashier"),
+                        'product': entry.get("product"),
+                        'unit_price': entry.get("unit_price"),
+                        'quantity': entry.get("voided_quantity"),
+                        'reason_id': entry.get("reason_id"),
+                        'waiter_name': entry.get("waiter_name"),
+                    })
+            return True
+        except Exception as e:
+            _logger.info("Error creating voided order records: %s", e)
+            return False
+        
     @http.route('/orderpinter/printorder', type='json', auth='none', cors='*')
     def print_(self, receipt=None, orderp=None):
         try:

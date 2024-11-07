@@ -112,7 +112,7 @@ patch(Order.prototype, {
     },
     generate_unique_id() {
         var unique_id = super.generate_unique_id();
-        return unique_id + "1";
+        return unique_id + "0";
     },
     isFiscalPrinted() {
         if (this.pos.get_order().is_refund && this.pos.get_order().rf_no !== "") {
@@ -126,8 +126,6 @@ patch(Order.prototype, {
         return false;
     },
     async removeOrderline(line) {
-        console.log("get order");
-        console.dir(this.pos.get_order());
         if (this.pos.get_order().rf_no !== "" || this.pos.get_order().fs_no !== "") {
             this.env.services.notification.add("Not allowed to modify a order with a printed fiscal receipt", {
                 type: 'danger',
@@ -141,6 +139,8 @@ patch(Order.prototype, {
             let orderedQty = 0;
 
             let kitchedDisplayData = Object.values(this.pos.get_order().lastOrderPrepaChange);
+            console.log("=== kitchedDisplayData ===");
+            console.dir(kitchedDisplayData);
             if (kitchedDisplayData.length != 0) {
                 kitchedDisplayData.forEach(ktoItem => {
                     if (ktoItem.product_id == this.pos.get_order().get_selected_orderline().get_product().id) {
@@ -151,70 +151,129 @@ patch(Order.prototype, {
             }
 
             if (found) {
-                if (this.pos.hasAccess(this.pos.config['allow_quantity_change_and_remove_orderline'])) {
-                    const popupResult = await this.env.services.popup.add(VoidReasonPopup, {
-                        title: _t("Void Orderline"),
-                        orderedQty: orderedQty
-                    });
+                await this.pos.doAuthFirstWithReturn('allow_remove_orderline', 'allow_remove_orderline_pin_lock_enabled', 'remove_orderline', async (success) => {
+                    console.log("Authentication success:", success);
 
-                    // let all_data = []
-                    // var jsonString = JSON.stringify(this.get_data_to_store());
-                    // var existingData = localStorage.getItem('VOIDED_ORDERS');
-                    // if (existingData) {
-                    //     let parsedData = JSON.parse(existingData);
-                    //     all_data.push(...parsedData)
-                    // }
-                    // all_data.push(JSON.parse(jsonString))
-                    // localStorage.setItem('VOIDED_ORDERS', JSON.stringify(all_data));
+                    if (success) {
+                        console.log("Authentication succeeded, showing VoidReasonPopup...");
 
-                    if (popupResult.confirmed) {
-                        super.removeOrderline(line);
-                    }
-                    else if (popupResult.error) {
-                        this.env.services.notification.add(popupResult.error, {
-                            type: 'danger',
-                            sticky: false,
-                            timeout: 10000,
+                        const popupResult = await this.env.services.popup.add(VoidReasonPopup, {
+                            title: _t("Void Orderline"),
+                            orderedQty: 1
+                        });
+
+                        console.log("Popup result:", popupResult);
+
+                        if (popupResult.confirmed) {
+                            console.log("Void confirmed by user. Removing order line...");
+                            super.removeOrderline(line);
+                        } else {
+                            console.log("Void was not confirmed by the user.");
+                        }
+                    } else {
+                        console.log("Authentication failed. Showing ErrorPopup...");
+
+                        this.pos.env.services.popup.add(ErrorPopup, {
+                            title: _t('Access Denied'),
+                            body: _t('You do not have access to change price!'),
                         });
                     }
-                }
-                else {
-                    this.pos.env.services.popup.add(ErrorPopup, {
-                        title: _t('Access Denied'),
-                        body: _t('You do not have access to void orderline'),
-                    });
-                }
+                });
+
+                // if (this.pos.hasAccess(this.pos.config['allow_remove_orderline'])) {
+                //     const popupResult = await this.env.services.popup.add(VoidReasonPopup, {
+                //         title: _t("Void Orderline"),
+                //         orderedQty: orderedQty
+                //     });
+
+                //     // let all_data = []
+                //     // var jsonString = JSON.stringify(this.get_data_to_store());
+                //     // var existingData = localStorage.getItem('VOIDED_ORDERS');
+                //     // if (existingData) {
+                //     //     let parsedData = JSON.parse(existingData);
+                //     //     all_data.push(...parsedData)
+                //     // }
+                //     // all_data.push(JSON.parse(jsonString))
+                //     // localStorage.setItem('VOIDED_ORDERS', JSON.stringify(all_data));
+
+                //     if (popupResult.confirmed) {
+                //         super.removeOrderline(line);
+                //     }
+                //     else if (popupResult.error) {
+                //         this.env.services.notification.add(popupResult.error, {
+                //             type: 'danger',
+                //             sticky: false,
+                //             timeout: 10000,
+                //         });
+                //     }
+                // }
+                // else {
+                //     this.pos.env.services.popup.add(ErrorPopup, {
+                //         title: _t('Access Denied'),
+                //         body: _t('You do not have access to void orderline'),
+                //     });
+                // }
             } else {
                 super.removeOrderline(line);
             }
         }
         else {
-            if (this.pos.hasAccess(this.pos.config['allow_quantity_change_and_remove_orderline'])) {
-                const popupResult = await this.env.services.popup.add(VoidReasonPopup, {
-                    title: _t("Void Orderline"),
-                    orderedQty: 1
-                });
+            await this.pos.doAuthFirstWithReturn('allow_remove_orderline', 'allow_remove_orderline_pin_lock_enabled', 'remove_orderline', async (success) => {
+                console.log("Authentication success:", success);
 
-                // let all_data = []
-                // var jsonString = JSON.stringify(this.get_data_to_store());
-                // var existingData = localStorage.getItem('VOIDED_ORDERS');
-                // if (existingData) {
-                //     let parsedData = JSON.parse(existingData);
-                //     all_data.push(...parsedData)
-                // }
-                // all_data.push(JSON.parse(jsonString))
-                // localStorage.setItem('VOIDED_ORDERS', JSON.stringify(all_data));
+                if (success) {
+                    console.log("Authentication succeeded, showing VoidReasonPopup...");
 
-                if (popupResult.confirmed) {
-                    super.removeOrderline(line);
+                    const popupResult = await this.env.services.popup.add(VoidReasonPopup, {
+                        title: _t("Void Orderline"),
+                        orderedQty: 1
+                    });
+
+                    console.log("Popup result:", popupResult);
+
+                    if (popupResult.confirmed) {
+                        console.log("Void confirmed by user. Removing order line...");
+                        super.removeOrderline(line);
+                    } else {
+                        console.log("Void was not confirmed by the user.");
+                    }
+                } else {
+                    console.log("Authentication failed. Showing ErrorPopup...");
+
+                    this.pos.env.services.popup.add(ErrorPopup, {
+                        title: _t('Access Denied'),
+                        body: _t('You do not have access to change price!'),
+                    });
                 }
-            }
-            else {
-                this.pos.env.services.popup.add(ErrorPopup, {
-                    title: _t('Access Denied'),
-                    body: _t('You do not have access to change price!'),
-                });
-            }
+            });
+
+
+            // if (this.pos.hasAccess(this.pos.config['allow_remove_orderline'])) {
+            //     const popupResult = await this.env.services.popup.add(VoidReasonPopup, {
+            //         title: _t("Void Orderline"),
+            //         orderedQty: 1
+            //     });
+
+            //     // let all_data = []
+            //     // var jsonString = JSON.stringify(this.get_data_to_store());
+            //     // var existingData = localStorage.getItem('VOIDED_ORDERS');
+            //     // if (existingData) {
+            //     //     let parsedData = JSON.parse(existingData);
+            //     //     all_data.push(...parsedData)
+            //     // }
+            //     // all_data.push(JSON.parse(jsonString))
+            //     // localStorage.setItem('VOIDED_ORDERS', JSON.stringify(all_data));
+
+            //     if (popupResult.confirmed) {
+            //         super.removeOrderline(line);
+            //     }
+            // }
+            // else {
+            //     this.pos.env.services.popup.add(ErrorPopup, {
+            //         title: _t('Access Denied'),
+            //         body: _t('You do not have access to change price!'),
+            //     });
+            // }
 
         }
     },
@@ -606,10 +665,10 @@ patch(Order.prototype, {
         let customer = {};
 
         if (receiptData.client != null) {
-            customer.customerName = receiptData.client.name;
+            customer.customerName = receiptData.client.name ? receiptData.client.name : "";
             customer.customerTradeName = "";
             customer.customerTIN = receiptData.client.vat ? receiptData.client.vat : "";
-            customer.customerPhoneNo = receiptData.client.phone;
+            customer.customerPhoneNo = receiptData.client.phone ? receiptData.client.phone : "";
         }
 
         let orderlinesFromOrder = this.orderlines;
@@ -770,7 +829,7 @@ patch(Order.prototype, {
                                 });
                             }
                         }
-                        return true;
+                        return false;
                     }
 
                     this._printed = false;

@@ -23,6 +23,10 @@ class ResConfigSettings(models.TransientModel):
     allow_quantity_change_and_remove_orderline_pin_lock_enabled = fields.Boolean(related='pos_config_id.allow_quantity_change_and_remove_orderline_pin_lock_enabled', readonly=False)
     allow_quantity_change_and_remove_orderline_pin_code = fields.Char(related='pos_config_id.allow_quantity_change_and_remove_orderline_pin_code', readonly=False)
 
+    allow_remove_orderline = fields.Selection(related='pos_config_id.allow_remove_orderline', readonly=False)
+    allow_remove_orderline_pin_lock_enabled = fields.Boolean(related='pos_config_id.allow_remove_orderline_pin_lock_enabled', readonly=False)
+    allow_remove_orderline_pin_code = fields.Char(related='pos_config_id.allow_remove_orderline_pin_code', readonly=False)
+
     allow_price_change = fields.Selection(related='pos_config_id.allow_price_change', readonly=False)
     price_change_pin_lock_enabled = fields.Boolean(related='pos_config_id.price_change_pin_lock_enabled', readonly=False)
     price_change_pin_code = fields.Char(related='pos_config_id.price_change_pin_code', readonly=False)

@@ -45,6 +45,15 @@ class PosConfig(models.Model):
     allow_quantity_change_and_remove_orderline_pin_lock_enabled = fields.Boolean(string='Enable PIN Locking for Quantity Change & Remove Orderline', default=False)
     allow_quantity_change_and_remove_orderline_pin_code = fields.Char(string='PIN Code', widget='password')
 
+    allow_remove_orderline = fields.Selection([
+        ('none', 'None'),
+        ('basic', 'Basic Users'),
+        ('advanced', 'Advanced Users'),
+        ('both', 'Both')
+    ], string='Allow Remove Orderline', default='none')
+    allow_remove_orderline_pin_lock_enabled = fields.Boolean(string='Enable PIN Locking for Remove Orderline', default=False)
+    allow_remove_orderline_pin_code = fields.Char(string='PIN Code', widget='password')
+
     allow_price_change = fields.Selection([
         ('none', 'None'),
         ('basic', 'Basic Users'),

@@ -29,6 +29,7 @@ class ClientLogger(http.Controller):
             responseObject['message'] = "log created"
             return responseObject
         return 'alive'
+    
     @http.route('/download/logfile', type='http', auth="public")
     def download_logfile(self, filepath, **kw):
         _logger.info("calling controller")

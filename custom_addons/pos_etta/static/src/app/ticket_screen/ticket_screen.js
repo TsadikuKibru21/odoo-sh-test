@@ -7,6 +7,7 @@ import { SelectionPopup } from "@point_of_sale/app/utils/input_popups/selection_
 import { ErrorPopup } from "@point_of_sale/app/errors/popups/error_popup";
 import { _t } from "@web/core/l10n/translation";
 import { ConfirmPopup } from "@point_of_sale/app/utils/confirm_popup/confirm_popup";
+import { VoidReasonPopup } from "../void_reason_popup/void_reason_popup";
 
 patch(TicketScreen.prototype, {
     _getToRefundDetail(orderline) {
@@ -31,7 +32,6 @@ patch(TicketScreen.prototype, {
         return res;
     },
     async onDeleteOrder(order) {
-        console.dir(order);
         if (order.rf_no !== "" || order.fs_no !== "") {
             this.env.services.notification.add("Can not delete order which has printed fiscal receipt", {
                 type: 'info',
@@ -40,17 +40,74 @@ patch(TicketScreen.prototype, {
             });
         }
         else {
-            if (this.pos.hasAccess(this.pos.config['allow_quantity_change_and_remove_orderline'])) {
-                await this.pos.doAuthFirst('allow_quantity_change_and_remove_orderline', 'allow_quantity_change_and_remove_orderline_pin_lock_enabled', 'quantity_change_and_remove', async () => {
-                    await super.onDeleteOrder(...arguments);
+            if (this.pos.config.module_pos_restaurant) {
+                // Original kitchen display data (pre-change)
+                let kitchenDisplayData = Object.values(order.lastOrderPrepaChange);
+
+                // Create a list to track voided items directly from kitchenDisplayData
+                let voidedItems = [];
+
+                console.log("=== kitchenDisplayData ===");
+                console.log(kitchenDisplayData);
+                console.log("=== order ===");
+                console.log(order);
+
+                // Mark all items in kitchenDisplayData as voided
+                kitchenDisplayData.forEach((line) => {
+                    voidedItems.push({
+                        order_id: order.uid,
+                        cashier: this.pos.get_cashier().name,
+                        product: line.name,
+                        unit_price: order.get_selected_orderline().product.lst_price,
+                        name: line.name,
+                        voided_quantity: line.quantity,
+                        waiter_name: order.waiter_name
+                    });
                 });
+
+                if (this.pos.hasAccess(this.pos.config['allow_quantity_change_and_remove_orderline'])) {
+                    await this.pos.doAuthFirst('allow_quantity_change_and_remove_orderline', 'allow_quantity_change_and_remove_orderline_pin_lock_enabled', 'quantity_change_and_remove', async () => {
+
+                        if (voidedItems.length > 0) {
+                            const popupResult = await this.env.services.popup.add(VoidReasonPopup, {
+                                title: _t("Void Orderline's"),
+                                void_items: voidedItems
+                            });
+
+                            console.log("Popup result:", popupResult);
+
+                            if (popupResult.confirmed) {
+                                await super.onDeleteOrder(...arguments);
+                            } else {
+                                console.log("Void was not confirmed by the user.");
+                            }
+                        }
+                        else {
+                            await super.onDeleteOrder(...arguments);
+                        }
+                    });
+                }
+                else {
+                    this.env.services.notification.add("You do not have access to delete an order!", {
+                        type: 'info',
+                        sticky: false,
+                        timeout: 10000,
+                    });
+                }
             }
             else {
-                this.env.services.notification.add("You do not have access to delete an order!", {
-                    type: 'info',
-                    sticky: false,
-                    timeout: 10000,
-                });
+                if (this.pos.hasAccess(this.pos.config['allow_quantity_change_and_remove_orderline'])) {
+                    await this.pos.doAuthFirst('allow_quantity_change_and_remove_orderline', 'allow_quantity_change_and_remove_orderline_pin_lock_enabled', 'quantity_change_and_remove', async () => {
+                        await super.onDeleteOrder(...arguments);
+                    });
+                }
+                else {
+                    this.env.services.notification.add("You do not have access to delete an order!", {
+                        type: 'info',
+                        sticky: false,
+                        timeout: 10000,
+                    });
+                }
             }
         }
     },
@@ -89,24 +146,21 @@ patch(TicketScreen.prototype, {
             }
         }
     },
-    _prepareRefundOrderlineOptions(toRefundDetail) {
-        const { qty, orderline } = toRefundDetail;
-        const draftPackLotLines = orderline.pack_lot_lines
-            ? { modifiedPackLotLines: [], newPackLotLines: orderline.pack_lot_lines }
-            : false;
+    _prepareAutoRefundOnOrder1(order) {
+        console.log(order);
+        order.orderlines.forEach(line => {
+            if (!line) {
+                return false;
+            }
 
-        var res = {
-            quantity: -qty,
-            price: orderline.price,
-            extras: { price_type: "automatic" },
-            merge: false,
-            refunded_orderline_id: orderline.id,
-            tax_ids: orderline.tax_ids,
-            discount: orderline.discount,
-            service_charge: orderline.service_charge,
-            draftPackLotLines: draftPackLotLines,
-        };
-        return res;
+            const toRefundDetail = this._getToRefundDetail(line);
+            const refundableQty = line.get_quantity() - line.refunded_qty;
+            toRefundDetail.qty = refundableQty;
+            if (this.pos.isProductQtyZero(refundableQty - 1) && toRefundDetail.qty === 0) {
+                toRefundDetail.qty = 1;
+            }
+        });
+        return true;
     },
     async onDoRefund() {
         let selectedApprover = await this.selectApproverCashier();

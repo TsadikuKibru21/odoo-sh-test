@@ -30,35 +30,56 @@ export class VoidReasonPopup extends AbstractAwaitablePopup {
         super.setup();
         this.pos = usePos();
         this.props.reasons = this.pos.void_reasons || [];
-        if(this.props.reasons.length > 0){
+        if (this.props.reasons.length > 0) {
             this.state.selectedReason = this.props.reasons[0].reason;
         }
     }
 
     async done() {
-        const order_id = this.pos.get_order().get_selected_orderline().order.uid;
-        const cashier = this.pos.get_cashier().name;
-        const product = this.pos.get_order().get_selected_orderline().product.display_name;
-        const unit_price = this.pos.get_order().get_selected_orderline().product.lst_price;
-        const quantity = this.props.orderedQty;
+        const void_items = this.props.void_items;
+        if (void_items) {
+            console.log("=== void_items ===");
+            console.log(void_items);
+            this.confirm();
+            try {
+                let self = this;
+                await jsonrpc(`/create_multi_void_reason`, {
+                    data: void_items
+                }).then(
+                    function (data) {
+                        self.state.saved = data;
+                        self.confirm();
+                    }
+                );
+            } catch (error) {
+                console.error('Error occurred while sending data:', error);
+            }
+        }
+        else {
+            const order_id = this.pos.get_order().get_selected_orderline().order.uid;
+            const cashier = this.pos.get_cashier().name;
+            const product = this.pos.get_order().get_selected_orderline().product.display_name;
+            const unit_price = this.pos.get_order().get_selected_orderline().product.lst_price;
+            const quantity = this.props.orderedQty;
 
-        try {
-            let self = this;
-            await jsonrpc(`/create_void_reason`, {
-                order_id: order_id,
-                cashier: cashier,
-                product: product,
-                unit_price: unit_price,
-                quantity: quantity,
-                reason_id: self.state.selectedReason,
-            }).then(
-                function (data) {
-                    self.state.saved = data;
-                    self.confirm();
-                }
-            );
-        } catch (error) {
-            console.error('Error occurred while sending data:', error);
+            try {
+                let self = this;
+                await jsonrpc(`/create_void_reason`, {
+                    order_id: order_id,
+                    cashier: cashier,
+                    product: product,
+                    unit_price: unit_price,
+                    quantity: quantity,
+                    reason_id: self.state.selectedReason,
+                }).then(
+                    function (data) {
+                        self.state.saved = data;
+                        self.confirm();
+                    }
+                );
+            } catch (error) {
+                console.error('Error occurred while sending data:', error);
+            }
         }
     }
 

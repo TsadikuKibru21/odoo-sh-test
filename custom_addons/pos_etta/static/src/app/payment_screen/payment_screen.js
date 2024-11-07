@@ -9,6 +9,7 @@ import { ConfirmPopup } from "@point_of_sale/app/utils/confirm_popup/confirm_pop
 import { ActionpadWidget } from "@point_of_sale/app/screens/product_screen/action_pad/action_pad";
 import { useService } from "@web/core/utils/hooks";
 import { _t } from "@web/core/l10n/translation";
+import { VoidReasonPopup } from "../void_reason_popup/void_reason_popup";
 
 patch(PaymentScreen.prototype, {
     isFiscalPrinted() {
@@ -99,33 +100,99 @@ patch(PaymentScreen.prototype, {
 });
 
 patch(ProductScreen.prototype, {
-    async _setValue(val) {
-        var newQty = this.numberBuffer.get() ? parseFloat(this.numberBuffer.get()) : 0;
-        var orderLines = !!this.currentOrder ? this.currentOrder.get_orderlines() : undefined;
-        if (orderLines !== undefined && orderLines.length > 0) {
-            var currentOrderLine = this.currentOrder.get_selected_orderline();
-            var currentQty = this.currentOrder.get_selected_orderline().get_quantity();
-            if (currentOrderLine && this.pos.numpadMode === 'quantity' && newQty < currentQty && !this.pos.hasAccess(this.pos.config['allow_quantity_change_and_remove_orderline'])) {
-                this.env.services.notification.add("You do not have access to decrease the quantity of an order line!", {
-                    type: 'danger',
-                    sticky: false,
-                    timeout: 10000,
-                });
-            } else if (currentOrderLine && this.pos.numpadMode === 'quantity' && val === 'remove' && !this.pos.hasAccess(this.pos.config['allow_quantity_change_and_remove_orderline'])) {
-                this.env.services.notification.add("You do not have access to delete an order line!", {
-                    type: 'danger',
-                    sticky: false,
-                    timeout: 10000,
-                });
-            } else {
-                await this.pos.doAuthFirst('allow_quantity_change_and_remove_orderline', 'allow_quantity_change_and_remove_orderline_pin_lock_enabled', 'quantity_change_and_remove', async () => {
-                    await super._setValue(val);
-                });
-            }
-        } else {
-            super._setValue(val)
-        }
-    },
+    // async _setValue(val) {
+    //     var newQty = this.numberBuffer.get() ? parseFloat(this.numberBuffer.get()) : 0;
+    //     var orderLines = !!this.currentOrder ? this.currentOrder.get_orderlines() : undefined;
+    //     if (orderLines !== undefined && orderLines.length > 0) {
+    //         var currentOrderLine = this.currentOrder.get_selected_orderline();
+    //         var currentQty = this.currentOrder.get_selected_orderline().get_quantity();
+    //         if (currentOrderLine && this.pos.numpadMode === 'quantity' && newQty < currentQty && !this.pos.hasAccess(this.pos.config['allow_quantity_change_and_remove_orderline'])) {
+    //             this.env.services.notification.add("You do not have access to decrease the quantity of an order line!", {
+    //                 type: 'danger',
+    //                 sticky: false,
+    //                 timeout: 10000,
+    //             });
+    //         } else if (currentOrderLine && (this.pos.numpadMode === 'quantity' || this.pos.numpadMode === 'price') && val === 'remove' && !this.pos.hasAccess(this.pos.config['allow_remove_orderline'])) {
+    //             this.env.services.notification.add("You do not have access to delete an order line!", {
+    //                 type: 'danger',
+    //                 sticky: false,
+    //                 timeout: 10000,
+    //             });
+    //         } else {
+    //             await this.pos.doAuthFirst('allow_quantity_change_and_remove_orderline', 'allow_quantity_change_and_remove_orderline_pin_lock_enabled', 'quantity_change_and_remove', async () => {
+    //                 await super._setValue(val);
+    //             });
+    //             // if (val === 'remove') {
+    //             //     await this.pos.doAuthFirst('allow_quantity_change_and_remove_orderline', 'allow_quantity_change_and_remove_orderline_pin_lock_enabled', 'quantity_change_and_remove', async () => {
+    //             //         await super._setValue(val);
+    //             //     });
+    //             // }
+    //             // else {
+    //             //     await this.pos.doAuthFirst('allow_remove_orderline', 'allow_remove_orderline_pin_lock_enabled', 'remove_orderline', async () => {
+    //             //         await super._setValue(val);
+    //             //     });
+    //             // }
+    //         }
+    //     } else {
+    //         super._setValue(val)
+    //     }
+    // },
+    // async _setValue(val) {
+    //     var newQty = this.numberBuffer.get() ? parseFloat(this.numberBuffer.get()) : 0;
+    //     console.log("New quantity from numberBuffer:", newQty);
+
+    //     var orderLines = !!this.currentOrder ? this.currentOrder.get_orderlines() : undefined;
+    //     console.log("Order lines:", orderLines);
+
+    //     if (orderLines !== undefined && orderLines.length > 0) {
+    //         var currentOrderLine = this.currentOrder.get_selected_orderline();
+    //         console.log("Current order line:", currentOrderLine);
+
+    //         var currentQty = currentOrderLine ? currentOrderLine.get_quantity() : 0;
+    //         console.log("Current quantity of selected order line:", currentQty);
+
+    //         if (currentOrderLine && this.pos.numpadMode === 'quantity' && newQty < currentQty && !this.pos.hasAccess(this.pos.config['allow_quantity_change_and_remove_orderline'])) {
+    //             console.log("Access denied for decreasing quantity.");
+    //             this.env.services.notification.add("You do not have access to decrease the quantity of an order line!", {
+    //                 type: 'danger',
+    //                 sticky: false,
+    //                 timeout: 10000,
+    //             });
+    //         } else {
+    //             console.log("Access granted. Proceeding with authentication.");
+    //             // await this.pos.doAuthFirst('allow_quantity_change_and_remove_orderline', 'allow_quantity_change_and_remove_orderline_pin_lock_enabled', 'quantity_change_and_remove', async () => {
+    //             //     console.log("Performing quantity change or removal.");
+    //             //     await super._setValue(val);
+    //             // });
+    //             await this.pos.doAuthFirstWithReturn('allow_quantity_change_and_remove_orderline', 'allow_quantity_change_and_remove_orderline_pin_lock_enabled', 'quantity_change_and_remove', async (success) => {
+    //                 if (success) {
+    //                     console.log("Performing quantity change or removal.");
+    //                     await super._setValue(val);
+    //                 }
+    //                 else {
+    //                     this.env.services.notification.add("Access denied", {
+    //                         type: 'danger',
+    //                         sticky: false,
+    //                         timeout: 10000,
+    //                     });
+    //                 }
+    //             });
+    //         }
+
+
+    //         if (currentOrderLine && (this.pos.numpadMode === 'quantity' || this.pos.numpadMode === 'price') && val === 'remove' && !this.pos.hasAccess(this.pos.config['allow_remove_orderline'])) {
+    //             console.log("Access denied for removing order line.");
+    //             this.env.services.notification.add("You do not have access to delete an order line!", {
+    //                 type: 'danger',
+    //                 sticky: false,
+    //                 timeout: 10000,
+    //             });
+    //         }
+    //     } else {
+    //         console.log("No order lines present. Proceeding to set value.");
+    //         super._setValue(val);
+    //     }
+    // },
     async onNumpadClick(buttonValue) {
         if (buttonValue === 'price') {
             if (this.pos.hasAccess(this.pos.config['allow_price_change'])) {
@@ -233,7 +300,6 @@ patch(ActionpadWidget.prototype, {
 
             if (this.pos.config.module_pos_restaurant) {
                 if (this.pos.get_order().get_waiter_name() === "" || this.pos.get_order().get_waiter_name() === undefined || !this.pos.get_order().get_waiter_name()) {
-                    console.log("set_waiter_name at submitOrder");
                     this.pos.get_order().set_waiter_name(this.pos.get_order().cashier.name);
                 }
             }
@@ -255,8 +321,78 @@ patch(ActionpadWidget.prototype, {
                 }
             }
 
-            await super.submitOrder();
-    
+            if (this.pos.config.module_pos_restaurant) {
+                // Original kitchen display data (pre-change)
+                let kitchenDisplayData = Object.values(this.pos.get_order().lastOrderPrepaChange);
+
+                // Updated order lines (post-change)
+                let orderlines = this.pos.get_order().get_orderlines();
+
+                // Create a list to track voided items
+                let voidedItems = [];
+
+                // Map the kitchen display data by `line_uuid` for easy comparison
+                let kitchenDataMap = new Map();
+                kitchenDisplayData.forEach((line) => {
+                    kitchenDataMap.set(line.line_uuid, line);
+                });
+
+                // Compare kitchen data with the updated order lines
+                orderlines.forEach((newOrderLine) => {
+                    let existingLine = kitchenDataMap.get(newOrderLine.uuid);
+
+                    if (existingLine) {
+                        // If quantity has decreased, calculate the voided amount
+                        if (newOrderLine.quantity < existingLine.quantity) {
+                            voidedItems.push({
+                                order_id: this.pos.get_order().uid,
+                                cashier: this.pos.get_cashier().name,
+                                product: newOrderLine.full_product_name,
+                                unit_price: newOrderLine.product.lst_price,
+                                voided_quantity: existingLine.quantity - newOrderLine.quantity,
+                                waiter_name: this.pos.get_order().waiter_name
+                            });
+                        }
+                        // Remove matched item to leave only fully voided items in kitchenDataMap
+                        kitchenDataMap.delete(newOrderLine.uuid);
+                    }
+                });
+
+                // Any remaining items in kitchenDataMap are completely voided (removed from order)
+                kitchenDataMap.forEach((voidedLine) => {
+                    voidedItems.push({
+                        order_id: this.pos.get_order().uid,
+                        cashier: this.pos.get_cashier().name,
+                        product: voidedLine.name,
+                        unit_price: this.pos.get_order().get_selected_orderline().product.lst_price,
+                        voided_quantity: voidedLine.quantity,
+                        waiter_name: this.pos.get_order().waiter_name
+                    });
+                });
+
+                console.log("=== Voided Items ===");
+                console.dir(voidedItems);
+
+                if (voidedItems.length > 0) {
+                    const popupResult = await this.env.services.popup.add(VoidReasonPopup, {
+                        title: _t("Void Orderline"),
+                        void_items: voidedItems
+                    });
+
+                    console.log("Popup result:", popupResult);
+
+                    if (popupResult.confirmed) {
+                        console.log("Void confirmed by user. Removing order line...");
+                        await super.submitOrder();
+                    } else {
+                        console.log("Void was not confirmed by the user.");
+                    }
+                }
+                else {
+                    await super.submitOrder();
+                }
+            }
+
         }
         else {
             console.log("Not ordered");

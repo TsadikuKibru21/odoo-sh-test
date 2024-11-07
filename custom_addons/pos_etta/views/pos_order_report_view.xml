@@ -33,6 +33,7 @@
                 <field name="product"/>
                 <field name="unit_price"/>
                 <field name="quantity"/>
+                <field name="waiter_name"/>
             </tree>
         </field>
     </record>

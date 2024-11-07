@@ -75,6 +75,9 @@ patch(PosStore.prototype, {
             case 'quantity_change_and_remove':
                 pinText = "Enter Qunatity Change or Remove Orderline PIN";
                 break;
+            case 'remove_orderline':
+                pinText = "Enter Remove Orderline PIN";
+                break;
             case 'payment':
                 pinText = "Enter Payment Access PIN";
                 break;
@@ -130,6 +133,9 @@ patch(PosStore.prototype, {
             case 'quantity_change_and_remove':
                 correctPin = this.config.allow_quantity_change_and_remove_orderline_pin_code === inputPin;
                 break;
+            case 'remove_orderline':
+                correctPin = this.config.allow_remove_orderline_pin_code === inputPin;
+                break;
             case 'payment':
                 correctPin = this.config.payment_pin_code === inputPin;
                 break;
@@ -168,6 +174,22 @@ patch(PosStore.prototype, {
             } else {
                 callback();
             }
+        }
+    },
+    async doAuthFirstWithReturn(config_access_level, config_pin_lock_enabled, pin_type, callback) {
+        if (this.hasAccess(this.config[config_access_level])) {
+            if (this.config[config_pin_lock_enabled]) {
+                const pinVerified = await this.checkPin(pin_type);
+                if (pinVerified) {
+                    callback(true);  // Authentication succeeded
+                } else {
+                    callback(false); // Authentication failed
+                }
+            } else {
+                callback(true);  // No pin lock required, authentication succeeded
+            }
+        } else {
+            callback(false); // Access denied
         }
     },
     async printZReport() {

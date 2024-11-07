@@ -25,7 +25,7 @@ patch(ReprintReceiptScreen.prototype, {
                     if (window.Android.isAndroidPOS()) {
                         if (this.props.order.is_refund) {
                             if (this.props.order.fs_no == "" || this.props.order.fs_no == false) {
-                                return await this.props.order.printFiscalReceipt()
+                                await this.props.order.printFiscalReceipt()
                             }
 
                             var result = window.Android.rePrintRefundInvoice(this.props.order.name);
@@ -33,7 +33,7 @@ patch(ReprintReceiptScreen.prototype, {
                         }
                         else {
                             if (this.props.order.fs_no == "" || this.props.order.fs_no == false) {
-                                return await this.props.order.printFiscalReceipt()
+                                await this.props.order.printFiscalReceipt()
                             }
 
                             var result = window.Android.rePrintSalesInvoice(this.props.order.name);

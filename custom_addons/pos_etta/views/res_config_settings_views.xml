@@ -16,7 +16,7 @@
                 </xpath>
                 <xpath expr="//block[@id='pos_pricing_section']" position="before">
                     <block title="Fiscal Function Access Control" id="pos_custom_access_settings">
-                        <setting string="Quantity Change and Remove Orderline Settings" help="Set access level and PIN lock for Quantity Change and Remove Orderline Settings">
+                        <setting string="Quantity Change Settings" help="Set access level and PIN lock for Quantity Change Settings">
                             <div class="row mt16">
                                 <label string="Access Level" for="allow_quantity_change_and_remove_orderline" class="col-lg-3 o_light_label" />
                                 <field name="allow_quantity_change_and_remove_orderline" class="col-lg-9" />
@@ -28,6 +28,20 @@
                             <div class="row mt16" invisible="not allow_quantity_change_and_remove_orderline_pin_lock_enabled">
                                 <label string="PIN Code" for="allow_quantity_change_and_remove_orderline_pin_code" class="col-lg-3 o_light_label" />
                                 <field name="allow_quantity_change_and_remove_orderline_pin_code" widget="password" class="col-lg-9" />
+                            </div>
+                        </setting>
+                        <setting string="Remove Orderline Settings" help="Set access level and PIN lock for Remove Orderline Settings">
+                            <div class="row mt16">
+                                <label string="Access Level" for="allow_remove_orderline" class="col-lg-3 o_light_label" />
+                                <field name="allow_remove_orderline" class="col-lg-9" />
+                            </div>
+                            <div class="row mt16">
+                                <label string="Enable PIN Locking" for="allow_remove_orderline_pin_lock_enabled" class="col-lg-3 o_light_label" />
+                                <field name="allow_remove_orderline_pin_lock_enabled" class="col-lg-9" />
+                            </div>
+                            <div class="row mt16" invisible="not allow_remove_orderline_pin_lock_enabled">
+                                <label string="PIN Code" for="allow_remove_orderline_pin_code" class="col-lg-3 o_light_label" />
+                                <field name="allow_remove_orderline_pin_code" widget="password" class="col-lg-9" />
                             </div>
                         </setting>
                         <setting string="Price Change Settings" help="Set access level and PIN lock for Price Change">
