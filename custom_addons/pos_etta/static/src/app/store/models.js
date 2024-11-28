@@ -765,11 +765,11 @@ patch(Order.prototype, {
 
                 var result;
                 if (isRefundOrder) {
-                    result = window.Android.printRefundInvoice(JSON.stringify(forSunmi));
+                    result = await window.Android.printRefundInvoice(JSON.stringify(forSunmi));
                     this.pos.makeLogEntry("Printing Refund Invoice Request => " + JSON.stringify(forSunmi));
                 }
                 else {
-                    result = window.Android.printSalesInvoice(JSON.stringify(forSunmi));
+                    result = await window.Android.printSalesInvoice(JSON.stringify(forSunmi));
                     this.pos.makeLogEntry("Printing Sales Invoice Request => " + JSON.stringify(forSunmi));
                 }
 
