@@ -818,18 +818,18 @@ patch(Order.prototype, {
                             if (confirmed) {
                                 await this.pos.doAuthFirst('ej_copy_access_level', 'ej_copy_pin_lock_enabled', 'ej_copy', async () => {
                                     if (this.is_refund) {
-                                        result = window.Android.rePrintRefundInvoice(forSunmi.ref);
+                                        result = await window.Android.rePrintRefundInvoice(forSunmi.ref);
                                         this.pos.makeLogEntry("RePrint Refund Invoice Request => " + forSunmi.ref);
                                     }
                                     else {
-                                        result = window.Android.rePrintSalesInvoice(forSunmi.ref);
+                                        result = await window.Android.rePrintSalesInvoice(forSunmi.ref);
                                         this.pos.makeLogEntry("RePrint Sales Invoice Request => " + forSunmi.ref);
                                     }
                                     return true;
                                 });
                             }
                         }
-                        return false;
+                        return true;
                     }
 
                     this._printed = false;
