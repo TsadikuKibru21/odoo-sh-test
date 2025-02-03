@@ -1,0 +1,57 @@
+<!-- kpi_calculation/views/kpi_per_position_views.xml -->
+<odoo>
+    <record id="view_kpi_per_position_tree" model="ir.ui.view">
+        <field name="name">kpi.per.position.tree</field>
+        <field name="model">kpi.per.position</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="name"/>
+                <field name="position_id"/>
+            
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_kpi_per_position_form" model="ir.ui.view">
+        <field name="name">kpi.per.position.form</field>
+        <field name="model">kpi.per.position</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="position_id"/>
+
+                        <field name="appraisal_evaluation" context="{'default_kpi_per_position': active_id}">
+                                <tree editable="bottom">
+                                    <field name="criteria_description"/>
+                                    <field name="unit_measurement"/>
+                                    <field name="target"/>
+                                     <field name="min_threshold"/>
+                                      <field name="max_threshold"/>
+                                    <field name="weight"/>
+
+                                </tree>
+                           
+                            </field>
+                 
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+     <record id="action_kpi_per_position" model="ir.actions.act_window">
+        <field name="name">KPI Per Position</field>
+        <field name="res_model">kpi.per.position</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+   <menuitem id="menu_kpi_per_position" name="KPI Per Position"
+              parent="hr_appraisal.menu_hr_appraisal_configuration"
+              action="action_kpi_per_position" 
+              sequence="5"
+/>
+
+   
+</odoo>

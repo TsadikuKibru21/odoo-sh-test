@@ -1,0 +1,11 @@
+<!-- File: data/appraisal_criteria_demo.xml -->
+<odoo>
+    <record id="attendance" model="appraisal.criteria">
+        <field name="name">attendance</field>
+    </record>
+
+    <record id="average_order_time" model="appraisal.criteria">
+        <field name="name">average_order_time</field>
+    </record>
+
+</odoo>

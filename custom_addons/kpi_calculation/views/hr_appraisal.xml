@@ -1,0 +1,41 @@
+<!-- Add this in your module XML file, e.g., `hr_appraisal_extension_views.xml` -->
+<odoo>
+    <record id="view_hr_appraisal_form_inherit" model="ir.ui.view">
+        <field name="name">hr.appraisal.form.inherit.criteria.description</field>
+        <field name="model">hr.appraisal</field>
+        <field name="inherit_id" ref="hr_appraisal.view_hr_appraisal_form"/>
+        <field name="arch" type="xml">
+            <!-- Choose where to add the field; here, we're adding it after the 'employee_id' field -->
+          <xpath expr="//field[@name='manager_ids']" position="after">
+                <field name="position_id"/>
+            </xpath>
+            <xpath expr="//field[@name='department_id']" position="after">
+                <field name="total_weighted_score"/>
+                <field name="appraisal_evaluation_readonly" invisible="1"/>
+            </xpath>
+            <xpath expr="//page[@name='private_note']" position="after">
+                <page string="KPI Per Position" name="kpi_per_position">
+                <field name="appraisal_evaluation" context="{'default_kpi_per_position': active_id}" readonly="appraisal_evaluation_readonly==True">
+                        <tree editable="bottom">
+                            <field name="criteria_description"/>
+                            <field name="unit_measurement"/>
+                            <field name="weight"/>
+                            <field name="target"/>
+                            <field name="min_threshold"/>
+                            <field name="max_threshold"/>
+                            <field name="actual"/>
+                            <field name="achievement_percentage"/>
+                                <field name="weighted_score"/>
+
+                        </tree>
+                    
+                </field>
+
+
+
+
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

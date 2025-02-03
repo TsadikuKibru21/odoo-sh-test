@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_kpi_per_position_user,kpi.per.position user,model_kpi_per_position,,1,1,1,1
+access_appraisal_evaluation_user,appraisal.evaluation user,model_appraisal_evaluation,,1,1,1,1
+access_appraisal_evaluations_user,appraisal.evaluations user,model_appraisal_evaluations,,1,1,1,1
+access_appraisal_criteria_manager,access_appraisal_criteria_manager,model_appraisal_criteria,,1,1,1,1
